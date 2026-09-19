@@ -706,7 +706,8 @@ function clientView(id, query) {
         ${client ? `<a class="btn" href="#/gig/new?client=${h(client.id)}&return=${encodeURIComponent('/client/' + client.id)}">＋ Log a gig for ${h(client.name)}</a>` : ''}
       </div>
     </form>
-    ${invoices.length ? '<div class="section-title">Invoices</div><div class="card list">' + invoices.map(invoiceRow).join('') + '</div>' : ''}`;
+    ${invoices.length ? '<div class="section-title">Invoices</div><div class="card list">' + invoices.map(invoiceRow).join('') + '</div>' : ''}
+    ${client ? '<div class="stack"><button class="btn danger" type="button" id="delete-client">Delete client</button></div>' : ''}`;
 
   return {
     title: client ? client.name : 'New client',
@@ -726,6 +727,19 @@ function clientView(id, query) {
         toast(client ? 'Client updated' : 'Client added');
         go(query.get('return') ? withParam(back, 'client', saved.id) : '/clients');
       });
+      const del = root.querySelector('#delete-client');
+      if (del) {
+        del.addEventListener('click', async () => {
+          const kept = invoices.length ? ' Their past invoices will be kept.' : '';
+          if (!confirm(`Delete ${client.name}?${kept}`)) return;
+          const res = await busy(del, 'Deleting…', () => api('deleteClient', { id: client.id }));
+          if (!res) return;
+          state.clients = state.clients.filter(c => c.id !== client.id);
+          saveCache();
+          toast('Client deleted');
+          go('/clients', { replace: true });
+        });
+      }
     },
   };
 }

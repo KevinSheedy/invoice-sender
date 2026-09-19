@@ -107,6 +107,20 @@ test('does not invoice a gig twice or edit an invoiced gig', () => {
   assert.equal(ok(b.call('load')).gigs.length, 1);
 });
 
+test('deletes a client but keeps their invoices', () => {
+  const b = setUp();
+  const { client, gigs } = addClientWithGigs(b);
+  ok(b.call('createInvoice', { clientId: client.id, gigIds: [gigs[0].id] }));
+  assert.match(b.call('deleteClient', { id: client.id }).error, /1 gig not invoiced yet – invoice or delete it first/);
+
+  ok(b.call('deleteGig', { id: gigs[1].id }));
+  assert.equal(ok(b.call('deleteClient', { id: client.id })).deleted, true);
+  const state = ok(b.call('load'));
+  assert.equal(state.clients.length, 0);
+  assert.equal(state.invoices[0].clientName, 'The Crown');
+  assert.equal(ok(b.call('deleteClient', { id: client.id })).deleted, false);
+});
+
 test('rejects gigs from a different client', () => {
   const b = setUp();
   const { gigs } = addClientWithGigs(b);

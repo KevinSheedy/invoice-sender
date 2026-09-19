@@ -43,6 +43,7 @@ const ACTIONS = {
   load: () => withLock_(load_),
   saveClient: d => withLock_(() => saveClient_(d)),
   saveGig: d => withLock_(() => saveGig_(d)),
+  deleteClient: d => withLock_(() => deleteClient_(d)),
   deleteGig: d => withLock_(() => deleteGig_(d)),
   previewInvoice: d => previewInvoice_(d),
   createInvoice: d => withLock_(() => createInvoice_(d)),
@@ -192,6 +193,19 @@ function saveGig_(d) {
     { clientId: d.clientId, date, venue, description: str_(d.description), fee: String(fee) });
   writeRow_('Gigs', gig, existing && existing._row);
   return gigOut_(gig);
+}
+
+// Past invoices keep their own copy of the client's name and email, so they're unaffected.
+function deleteClient_(d) {
+  const client = findRow_('Clients', 'id', d.id);
+  if (!client) return { deleted: false };
+  const waiting = readTable_('Gigs').filter(g => g.clientId === client.id && !g.invoiceNumber).length;
+  if (waiting) {
+    throw new Error(client.name + ' has ' + waiting + ' gig' + (waiting === 1 ? '' : 's') +
+      ' not invoiced yet – invoice or delete ' + (waiting === 1 ? 'it' : 'them') + ' first');
+  }
+  sheet_('Clients').deleteRow(client._row);
+  return { deleted: true };
 }
 
 function deleteGig_(d) {
