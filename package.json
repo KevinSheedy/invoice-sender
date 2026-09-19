@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "test": "node --test dev/*.test.mjs",
-    "dev": "node dev/server.mjs --seed"
+    "dev": "node dev/server.mjs --seed",
+    "deploy:script": "node dev/deploy-script.mjs"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
   }
 }

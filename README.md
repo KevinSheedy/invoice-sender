@@ -84,15 +84,36 @@ Then delete the test rows from the sheet, and in the app's Settings set **Next n
 
 ## Changing the Apps Script later
 
-After editing `Code.gs` in the Apps Script editor, go to **Deploy → Manage deployments**, click ✏️ on
-the web app, set **Version** to **New version** and click **Deploy**. The URL stays the same. (Just
-saving the file isn't enough: the web app keeps running the old version until you do this.)
+Edit `apps-script/Code.gs` here, then:
+
+```sh
+npm run deploy:script -- "what changed"
+```
+
+This runs the tests, pushes `apps-script/` to Google with [clasp](https://github.com/google/clasp) and
+moves the live web app to the new version. The URL stays the same.
+
+One-time setup for this, on a new machine:
+
+1. Turn on **Google Apps Script API** at <https://script.google.com/home/usersettings>.
+2. `npm install`, then `npx clasp login`.
+3. Create `.clasp.json` (it's git-ignored) with your script ID from the Apps Script editor's
+   ⚙️ **Project Settings**:
+
+   ```json
+   { "scriptId": "YOUR_SCRIPT_ID", "rootDir": "apps-script" }
+   ```
+
+Pushing replaces the script in the editor, so make changes here rather than in the editor. Without
+clasp, you can paste `Code.gs` into the editor, then go to **Deploy → Manage deployments**, click ✏️,
+set **Version** to **New version** and click **Deploy**. Just saving isn't enough: the web app keeps
+running the old version until you deploy.
 
 If the API key ever gets out (a lost phone, say), run `resetApiKey` and enter the new key in the app.
 
 ## Working on it locally
 
-Needs Node 20 or later; no packages to install.
+Needs Node 20 or later. `npm install` is only needed for deploying the Apps Script (clasp).
 
 ```sh
 npm test      # backend tests, running Code.gs against in-memory fakes of Sheets, Drive and Gmail
