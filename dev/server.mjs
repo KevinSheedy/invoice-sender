@@ -25,10 +25,10 @@ if (process.argv.includes('--seed')) {
     return res.result;
   };
   call('saveSettings', {
-    yourName: 'Sam Singer', address: '12 Harmony Row\nDublin 2', email: 'sam@example.com',
+    yourName: 'Sam Singer', email: 'sam@example.com',
     phone: '087 123 4567', accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112 3456 78', bic: 'BOFIIE2D',
   });
-  const crown = call('saveClient', { name: 'The Crown Bar', email: 'bookings@crownbar.ie', address: '4 Dame St\nDublin 2', defaultFee: 250 });
+  const crown = call('saveClient', { name: 'The Crown Bar', email: 'bookings@crownbar.ie', defaultFee: 250 });
   const wed = call('saveClient', { name: 'Ellen & Tom (wedding)', email: 'ellen@example.com' });
   call('saveGig', { clientId: crown.id, date: '2026-09-05', venue: 'The Crown Bar', description: 'Jazz trio vocals', fee: 250 });
   call('saveGig', { clientId: crown.id, date: '2026-09-12', venue: 'The Crown Bar', description: 'Jazz trio vocals', fee: 250 });

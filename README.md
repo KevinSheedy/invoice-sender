@@ -78,7 +78,7 @@ Then delete the test rows from the sheet, and in the app's Settings set **Next n
 - **New invoice**: pick the client, tick the gigs to include, **Preview**, then **Create Gmail draft**.
   The invoice page then has an **Open Gmail to send it** button.
 - **Status**: *Draft in Gmail* → *Awaiting payment* (the app spots the email in your Sent folder
-  automatically; you can also tap **I've sent it**) → *Overdue* after the due date → **Mark as paid**.
+  automatically; you can also tap **I've sent it**) → **Mark as paid**.
 - **Invoice numbers**: `{YYYY}-{NNN}` gives 2026-001, 2026-002… restarting each January. To carry on
   from invoices you've already sent, change the format and **Next number** in Settings.
 

@@ -15,7 +15,7 @@ function ok(res) {
 }
 
 function addClientWithGigs(b, fees = [250, 300]) {
-  const client = ok(b.call('saveClient', { name: 'The Crown', email: 'bookings@crown.ie', address: '1 Main St\nDublin' }));
+  const client = ok(b.call('saveClient', { name: 'The Crown', email: 'bookings@crown.ie' }));
   const gigs = fees.map((fee, i) => ok(b.call('saveGig', {
     clientId: client.id, date: `2026-09-${String(10 + i).padStart(2, '0')}`, venue: `Venue ${i}`, fee,
   })));
@@ -32,7 +32,7 @@ test('setup creates tables, settings and an API key', () => {
   assert.equal(settings.numberYear, undefined, 'bookkeeping settings are not exposed');
 
   b.context.setup(); // running it again is harmless
-  assert.equal(b.spreadsheet.getSheetByName('Settings').getLastRow(), 1 + 17);
+  assert.equal(b.spreadsheet.getSheetByName('Settings').getLastRow(), 1 + 15);
 });
 
 test('rejects a wrong or missing key', () => {
@@ -79,14 +79,15 @@ test('creates an invoice as a Gmail draft with the PDF attached', () => {
   assert.equal(invoice.number, '2026-001');
   assert.equal(invoice.status, 'draft');
   assert.equal(invoice.issueDate, '2026-09-19');
-  assert.equal(invoice.dueDate, '2026-10-03');
+  assert.equal(invoice.dueDate, undefined);
   assert.equal(invoice.gigs.length, 2);
 
   assert.equal(b.mail.drafts.length, 1);
   const draft = b.mail.drafts[0];
   assert.equal(draft.to, 'bookings@crown.ie');
   assert.equal(draft.subject, 'Invoice 2026-001 from Kev <Singer>');
-  assert.match(draft.body, /invoice 2026-001 for €550\.00, due by 3 Oct 2026/);
+  assert.match(draft.body, /invoice 2026-001 for €550\.00\.\n/);
+  assert.doesNotMatch(preview.html, /Due|Main St/);
   assert.equal(draft.options.attachments[0].getContentType(), 'application/pdf');
   assert.equal(draft.options.attachments[0].getName(), 'Invoice 2026-001 - The Crown.pdf');
 

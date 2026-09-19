@@ -10,32 +10,29 @@
  */
 
 const TABLES = {
-  Clients: ['id', 'name', 'email', 'address', 'defaultFee', 'createdAt'],
+  Clients: ['id', 'name', 'email', 'defaultFee', 'createdAt'],
   Gigs: ['id', 'clientId', 'date', 'venue', 'description', 'fee', 'invoiceNumber', 'createdAt'],
-  Invoices: ['number', 'clientId', 'clientName', 'clientEmail', 'clientAddress', 'issueDate',
-    'dueDate', 'currency', 'total', 'gigs', 'status', 'pdfFileId', 'pdfUrl', 'emailedAt',
+  Invoices: ['number', 'clientId', 'clientName', 'clientEmail', 'issueDate',
+    'currency', 'total', 'gigs', 'status', 'pdfFileId', 'pdfUrl', 'emailedAt',
     'sentAt', 'paidAt', 'createdAt'],
   Settings: ['key', 'value'],
 };
 
 const DEFAULT_SETTINGS = {
   yourName: '',
-  address: '',
   email: '',
   phone: '',
   accountName: '',
   iban: '',
   bic: '',
   currency: 'EUR',
-  paymentTermsDays: '14',
   numberFormat: '{YYYY}-{NNN}',
   nextNumber: '1',
   numberYear: '',
   defaultDescription: 'Live vocal performance',
   invoiceNote: 'Thank you for booking me!',
   emailSubject: 'Invoice {number} from {yourName}',
-  emailBody: 'Hi {clientName},\n\nPlease find attached invoice {number} for {total}, ' +
-    'due by {dueDate}.\n\nMany thanks,\n{yourName}',
+  emailBody: 'Hi {clientName},\n\nPlease find attached invoice {number} for {total}.\n\nMany thanks,\n{yourName}',
   sendMode: 'draft',
 };
 
@@ -173,7 +170,7 @@ function saveClient_(d) {
   const existing = d.id ? findRow_('Clients', 'id', d.id) : null;
   if (d.id && !existing) throw new Error('Client not found – try refreshing');
   const client = Object.assign({}, existing || { id: newId_(), createdAt: nowIso_() },
-    { name, email, address: str_(d.address), defaultFee });
+    { name, email, defaultFee });
   writeRow_('Clients', client, existing && existing._row);
   return clientOut_(client);
 }
@@ -282,9 +279,6 @@ function saveSettings_(d) {
     // A hand-set counter applies to this year, so the yearly reset shouldn't undo it.
     if (patch.nextNumber !== current.nextNumber) patch.numberYear = today_().slice(0, 4);
   }
-  if (patch.paymentTermsDays !== undefined && !/^\d+$/.test(patch.paymentTermsDays)) {
-    throw new Error('Payment terms must be a number of days');
-  }
   if (patch.currency !== undefined) {
     patch.currency = patch.currency.toUpperCase();
     if (!/^[A-Z]{3}$/.test(patch.currency)) throw new Error('Currency must be a 3-letter code like EUR');
@@ -320,9 +314,7 @@ function draftInvoice_(d, settings) {
     clientId: client.id,
     clientName: client.name,
     clientEmail: client.email,
-    clientAddress: client.address,
     issueDate,
-    dueDate: addDays_(issueDate, parseInt(settings.paymentTermsDays, 10) || 0),
     currency: settings.currency || 'EUR',
     total: round2_(gigs.reduce((sum, g) => sum + Number(g.fee), 0)),
     gigs: gigs.map(g => ({ id: g.id, date: g.date, venue: g.venue, description: g.description, fee: Number(g.fee) })),
@@ -386,7 +378,6 @@ function templateVars_(inv, s) {
     clientName: inv.clientName,
     total: formatMoney_(inv.total, inv.currency),
     issueDate: formatDate_(inv.issueDate),
-    dueDate: formatDate_(inv.dueDate),
     yourName: s.yourName,
     venues: inv.gigs.map(g => g.venue).filter((v, i, all) => all.indexOf(v) === i).join(', '),
   };
@@ -445,16 +436,14 @@ function renderInvoiceHtml_(inv, s) {
     '</style></head><body><div class="page">' +
     '<table><tr>' +
       '<td><h1>INVOICE</h1></td>' +
-      '<td class="from"><strong>' + e(s.yourName) + '</strong><br>' + lines(s.address) +
+      '<td class="from"><strong>' + e(s.yourName) + '</strong>' +
         (contact ? '<br>' + contact : '') + '</td>' +
     '</tr></table>' +
     '<table class="section"><tr>' +
-      '<td><div class="heading">Bill to</div><strong>' + e(inv.clientName) + '</strong><br>' +
-        lines(inv.clientAddress) + (inv.clientAddress ? '<br>' : '') + e(inv.clientEmail) + '</td>' +
+      '<td><div class="heading">Bill to</div><strong>' + e(inv.clientName) + '</strong><br>' + e(inv.clientEmail) + '</td>' +
       '<td style="width:240px"><table>' +
         '<tr><td class="label">Invoice no.</td><td><strong>' + e(inv.number) + '</strong></td></tr>' +
         '<tr><td class="label">Date</td><td>' + e(formatDate_(inv.issueDate)) + '</td></tr>' +
-        '<tr><td class="label">Due</td><td>' + e(formatDate_(inv.dueDate)) + '</td></tr>' +
       '</table></td>' +
     '</tr></table>' +
     '<table class="section items">' +
@@ -560,7 +549,7 @@ function publicSettings_(s) {
 }
 
 function clientOut_(r) {
-  return { id: r.id, name: r.name, email: r.email, address: r.address,
+  return { id: r.id, name: r.name, email: r.email,
     defaultFee: r.defaultFee === '' ? null : Number(r.defaultFee), createdAt: r.createdAt };
 }
 
@@ -598,11 +587,6 @@ function nowIso_() {
 
 function today_() {
   return Utilities.formatDate(now_(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-}
-
-function addDays_(isoDate, days) {
-  const p = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(p[0], p[1] - 1, p[2] + days)).toISOString().slice(0, 10);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

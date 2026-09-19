@@ -280,7 +280,6 @@ main {
 .pill.paid { background: var(--ok-soft); color: var(--ok); }
 .pill.draft, .pill.created { background: var(--warn-soft); color: var(--warn); }
 .pill.sent { background: var(--info-soft); color: var(--info); }
-.pill.overdue { background: var(--bad-soft); color: var(--danger); }
 
 .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .detail-head h2 { margin: 0; font-size: 24px; }

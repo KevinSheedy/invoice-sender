@@ -148,7 +148,6 @@ function statusInfo(inv) {
   if (inv.status === 'paid') return { cls: 'paid', label: 'Paid' };
   if (inv.status === 'created') return { cls: 'created', label: 'Not emailed' };
   if (inv.status === 'draft') return { cls: 'draft', label: 'Draft in Gmail' };
-  if (inv.dueDate && inv.dueDate < today()) return { cls: 'overdue', label: 'Overdue' };
   return { cls: 'sent', label: 'Awaiting payment' };
 }
 
@@ -574,7 +573,7 @@ function invoiceView(number) {
   const inv = state.invoices.find(i => i.number === number);
   if (!inv) return notFoundView();
   const cur = inv.currency;
-  const dates = [`Issued ${h(fmtDate(inv.issueDate))}`, `Due ${h(fmtDate(inv.dueDate))}`];
+  const dates = [`Issued ${h(fmtDate(inv.issueDate))}`];
   if (inv.sentAt) dates.push(`Sent ${h(fmtDate(inv.sentAt))}`);
   if (inv.paidAt) dates.push(`Paid ${h(fmtDate(inv.paidAt))}`);
 
@@ -686,7 +685,7 @@ function clientView(id, query) {
   const client = id === 'new' ? null : clientById(id);
   if (id !== 'new' && !client) return notFoundView();
   const back = query.get('return') || '/clients';
-  const values = client || { name: '', email: '', address: '', defaultFee: '' };
+  const values = client || { name: '', email: '', defaultFee: '' };
   const invoices = client ? sortedInvoices(state.invoices.filter(i => i.clientId === client.id)) : [];
 
   const html = `
@@ -697,9 +696,6 @@ function clientView(id, query) {
         </label>
         <label class="field"><span>Email</span>
           <input name="email" type="email" value="${h(values.email)}" autocapitalize="off" autocorrect="off" inputmode="email" enterkeyhint="next">
-        </label>
-        <label class="field"><span>Address (optional, shown on invoices)</span>
-          <textarea name="address" rows="3" autocapitalize="words">${h(values.address)}</textarea>
         </label>
         <label class="field"><span>Usual fee (optional, ${h(currency())})</span>
           <input name="defaultFee" value="${h(values.defaultFee === null ? '' : values.defaultFee)}" inputmode="decimal" placeholder="0.00">
@@ -761,7 +757,6 @@ function settingsView() {
       <div class="section-title">Your details (shown on invoices)</div>
       <div class="card">
         ${field('yourName', 'Name', 'autocapitalize="words"')}
-        ${area('address', 'Address')}
         ${field('email', 'Email', 'type="email" autocapitalize="off" inputmode="email"')}
         ${field('phone', 'Phone', 'type="tel"')}
       </div>
@@ -771,14 +766,11 @@ function settingsView() {
         ${field('accountName', 'Account name', 'autocapitalize="words"')}
         ${field('iban', 'IBAN', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
         ${field('bic', 'BIC', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
-        <div class="row2">
-          ${field('paymentTermsDays', 'Pay within (days)', 'inputmode="numeric"')}
-          <label class="field"><span>Currency</span>
-            <select name="currency">
-              ${['EUR', 'GBP', 'USD'].map(c => `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
-            </select>
-          </label>
-        </div>
+        <label class="field"><span>Currency</span>
+          <select name="currency">
+            ${['EUR', 'GBP', 'USD'].map(c => `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </label>
       </div>
 
       <div class="section-title">Invoices</div>
@@ -805,7 +797,7 @@ function settingsView() {
         ${area('emailBody', 'Message', 6)}
       </div>
       <p class="hint">You can use <code>{clientName}</code> <code>{number}</code> <code>{total}</code>
-        <code>{dueDate}</code> <code>{issueDate}</code> <code>{venues}</code> <code>{yourName}</code>.</p>
+        <code>{issueDate}</code> <code>{venues}</code> <code>{yourName}</code>.</p>
 
       <div class="stack"><button class="btn primary" type="submit">Save settings</button></div>
     </form>`;
