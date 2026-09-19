@@ -3,7 +3,7 @@
 // Gig Invoices – phone app. Talks to the Apps Script web app in apps-script/Code.gs.
 
 const CONFIG_KEY = 'gigInvoices.config';
-const CACHE_KEY = 'gigInvoices.data';
+const CACHE_KEY = 'gigInvoices.data.v2';
 const SYNC_INTERVAL_MS = 30000;
 
 const state = {
@@ -177,7 +177,7 @@ function sortedClients() {
 
 function unbilledGigs(clientId) {
   return state.gigs
-    .filter(g => !g.invoiceNumber && (!clientId || g.clientId === clientId))
+    .filter(g => !g.invoiceId && (!clientId || g.clientId === clientId))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
@@ -361,10 +361,10 @@ function homeView() {
 
 function invoiceRow(inv) {
   return `
-    <a href="#/invoice/${encodeURIComponent(inv.number)}">
+    <a href="#/invoice/${encodeURIComponent(inv.id)}">
       <div class="grow">
         <div class="primary">${h(inv.clientName)}</div>
-        <div class="secondary">${h(inv.number)} · ${h(fmtDate(inv.issueDate))}</div>
+        <div class="secondary">${h(fmtDate(inv.issueDate))} · ${inv.gigs.length} gig${inv.gigs.length === 1 ? '' : 's'}</div>
       </div>
       <div class="amount">${money(inv.total, inv.currency)}<br>${pill(inv)}</div>
       <span class="chevron"></span>
@@ -374,7 +374,8 @@ function invoiceRow(inv) {
 function gigView(id, query) {
   const gig = id === 'new' ? null : state.gigs.find(g => g.id === id);
   if (id !== 'new' && !gig) return notFoundView();
-  const locked = Boolean(gig && gig.invoiceNumber);
+  const locked = Boolean(gig && gig.invoiceId);
+  const lockedBy = locked && state.invoices.find(i => i.id === gig.invoiceId);
   const back = query.get('return') || '/';
   const clientId = gig ? gig.clientId : query.get('client') || recentClientId();
   const values = gig || {
@@ -386,7 +387,7 @@ function gigView(id, query) {
   };
 
   const html = `
-    ${locked ? `<div class="error">This gig is on invoice ${h(gig.invoiceNumber)}, so it can't be changed.</div>` : ''}
+    ${locked ? `<div class="error">This gig is on ${lockedBy ? `the ${h(fmtDate(lockedBy.issueDate))} invoice` : 'an invoice'}, so it can't be changed.</div>` : ''}
     <form id="gig-form" novalidate>
       <fieldset style="border:0;margin:0;padding:0" ${locked ? 'disabled' : ''}>
       <div class="card">
@@ -542,7 +543,7 @@ function newInvoiceView(query) {
       root.querySelector('#preview').addEventListener('click', async e => {
         const res = await busy(e.currentTarget, 'Preparing…', () =>
           api('previewInvoice', { clientId, gigIds: picked().map(g => g.id) }));
-        if (res) openSheet('Invoice ' + res.number, res.html);
+        if (res) openSheet('Invoice preview', res.html);
       });
       root.querySelector('#create').addEventListener('click', async e => {
         const chosen = picked();
@@ -556,12 +557,11 @@ function newInvoiceView(query) {
           api('createInvoice', { clientId, gigIds: chosen.map(g => g.id) }));
         if (!res) return;
         const inv = res.invoice;
-        upsert(state.invoices, inv, 'number');
-        state.gigs.forEach(g => { if (chosen.some(c => c.id === g.id)) g.invoiceNumber = inv.number; });
+        upsert(state.invoices, inv);
+        state.gigs.forEach(g => { if (chosen.some(c => c.id === g.id)) g.invoiceId = inv.id; });
         delete unticked[clientId];
         saveCache();
-        sync(); // picks up the new invoice counter in settings
-        go('/invoice/' + encodeURIComponent(inv.number), { replace: true });
+        go('/invoice/' + encodeURIComponent(inv.id), { replace: true });
         if (res.emailError) toast('Invoice saved, but Gmail had a problem: ' + res.emailError, true);
         else toast(inv.status === 'sent' ? 'Invoice sent' : 'Draft ready in Gmail');
       });
@@ -569,11 +569,11 @@ function newInvoiceView(query) {
   };
 }
 
-function invoiceView(number) {
-  const inv = state.invoices.find(i => i.number === number);
+function invoiceView(id) {
+  const inv = state.invoices.find(i => i.id === id);
   if (!inv) return notFoundView();
   const cur = inv.currency;
-  const dates = [`Issued ${h(fmtDate(inv.issueDate))}`];
+  const dates = [];
   if (inv.sentAt) dates.push(`Sent ${h(fmtDate(inv.sentAt))}`);
   if (inv.paidAt) dates.push(`Paid ${h(fmtDate(inv.paidAt))}`);
 
@@ -597,8 +597,8 @@ function invoiceView(number) {
 
   const html = `
     <div class="card pad">
-      <div class="detail-head"><h2>${h(inv.number)}</h2>${pill(inv)}</div>
-      <div class="meta"><strong>${h(inv.clientName)}</strong> · ${h(inv.clientEmail)}<br>${dates.join(' · ')}</div>
+      <div class="detail-head"><h2>${h(fmtDate(inv.issueDate))}</h2>${pill(inv)}</div>
+      <div class="meta"><strong>${h(inv.clientName)}</strong> · ${h(inv.clientEmail)}${dates.length ? '<br>' + dates.join(' · ') : ''}</div>
     </div>
     <div class="section-title">Gigs</div>
     <div class="card list">
@@ -618,7 +618,8 @@ function invoiceView(number) {
       : ''}
     ${inv.status !== 'created' && inv.status !== 'paid'
       ? `<p class="hint"><button class="link" type="button" data-email>${inv.status === 'draft' ? 'Draft missing? Make a new one' : 'Email it again'}</button></p>`
-      : ''}`;
+      : ''}
+    <div class="stack"><button class="btn danger" type="button" id="delete-invoice">Delete invoice</button></div>`;
 
   return {
     title: 'Invoice',
@@ -630,9 +631,9 @@ function invoiceView(number) {
       root.querySelectorAll('[data-status]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const updated = await busy(btn, 'Saving…', () =>
-            api('setInvoiceStatus', { number: inv.number, status: btn.dataset.status }));
+            api('setInvoiceStatus', { id: inv.id, status: btn.dataset.status }));
           if (!updated) return;
-          upsert(state.invoices, updated, 'number');
+          upsert(state.invoices, updated);
           saveCache();
           render();
           toast(updated.status === 'paid' ? 'Marked as paid' : 'Updated');
@@ -641,15 +642,32 @@ function invoiceView(number) {
       root.querySelectorAll('[data-email]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const sending = state.settings && state.settings.sendMode === 'send';
-          if (sending && !confirm(`Email invoice ${inv.number} to ${inv.clientEmail} now?`)) return;
+          if (sending && !confirm(`Email this invoice to ${inv.clientEmail} now?`)) return;
           const updated = await busy(btn, sending ? 'Sending…' : 'Creating…', () =>
-            api('emailInvoice', { number: inv.number }));
+            api('emailInvoice', { id: inv.id }));
           if (!updated) return;
-          upsert(state.invoices, updated, 'number');
+          upsert(state.invoices, updated);
           saveCache();
           render();
           toast(sending ? 'Invoice sent' : 'Draft ready in Gmail');
         });
+      });
+      const del = root.querySelector('#delete-invoice');
+      del.addEventListener('click', async () => {
+        const warning = inv.status === 'draft'
+          ? 'Its Gmail draft and PDF will be deleted.'
+          : inv.status === 'created'
+            ? 'Its PDF will be deleted.'
+            : 'Its PDF will be deleted. The email you sent is not affected.';
+        const gigsNote = `The gig${inv.gigs.length === 1 ? '' : 's'} on it will go back to "Not invoiced yet".`;
+        if (!confirm(`Delete the ${fmtDate(inv.issueDate)} invoice for ${inv.clientName}? ${warning} ${gigsNote}`)) return;
+        const res = await busy(del, 'Deleting…', () => api('deleteInvoice', { id: inv.id }));
+        if (!res) return;
+        state.invoices = state.invoices.filter(i => i.id !== inv.id);
+        state.gigs.forEach(g => { if (g.invoiceId === inv.id) g.invoiceId = ''; });
+        saveCache();
+        toast('Invoice deleted');
+        go('/', { replace: true });
       });
     },
   };
@@ -789,15 +807,9 @@ function settingsView() {
 
       <div class="section-title">Invoices</div>
       <div class="card">
-        <div class="row2">
-          ${field('numberFormat', 'Number format', 'autocapitalize="off" autocorrect="off" spellcheck="false"')}
-          ${field('nextNumber', 'Next number', 'inputmode="numeric"')}
-        </div>
         ${field('defaultDescription', 'Usual gig description')}
         ${area('invoiceNote', 'Note at the bottom', 2)}
       </div>
-      <p class="hint"><code>{YYYY}</code> is the year and <code>{NNN}</code> the counter, padded to 3 digits.
-        With a year in the format, the counter restarts at 1 each January. Next invoice: <strong id="next-preview"></strong></p>
 
       <div class="section-title">Email</div>
       <div class="card">
@@ -810,8 +822,8 @@ function settingsView() {
         ${field('emailSubject', 'Subject')}
         ${area('emailBody', 'Message', 6)}
       </div>
-      <p class="hint">You can use <code>{clientName}</code> <code>{number}</code> <code>{total}</code>
-        <code>{issueDate}</code> <code>{venues}</code> <code>{yourName}</code>.</p>
+      <p class="hint">You can use <code>{clientName}</code> <code>{date}</code> <code>{total}</code>
+        <code>{venues}</code> <code>{yourName}</code>.</p>
 
       <div class="stack"><button class="btn primary" type="submit">Save settings</button></div>
     </form>`;
@@ -848,17 +860,6 @@ function settingsView() {
 
       const form = root.querySelector('#settings-form');
       if (!form) return;
-      const preview = () => {
-        const fmt = form.numberFormat.value || '{YYYY}-{NNN}';
-        const year = today().slice(0, 4);
-        root.querySelector('#next-preview').textContent = fmt
-          .replace(/\{YYYY\}/g, year)
-          .replace(/\{YY\}/g, year.slice(2))
-          .replace(/\{(N+)\}/g, (m, ns) => String(form.nextNumber.value || 1).padStart(ns.length, '0'));
-      };
-      preview();
-      form.numberFormat.addEventListener('input', preview);
-      form.nextNumber.addEventListener('input', preview);
       form.addEventListener('submit', async e => {
         e.preventDefault();
         const saved = await busy(form.querySelector('[type=submit]'), 'Saving…', () =>

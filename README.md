@@ -69,7 +69,7 @@ Add yourself as a client, log a test gig and create an invoice. Then check:
 - Gmail → **Drafts** has the email with the PDF attached.
 - Google Drive → **Gig Invoices** folder has the PDF, and it looks right.
 
-Then delete the test rows from the sheet, and in the app's Settings set **Next number** back to 1.
+Then delete the test invoice, gig and client in the app.
 
 ## Using it
 
@@ -79,8 +79,10 @@ Then delete the test rows from the sheet, and in the app's Settings set **Next n
   The invoice page then has an **Open Gmail to send it** button.
 - **Status**: *Draft in Gmail* → *Awaiting payment* (the app spots the email in your Sent folder
   automatically; you can also tap **I've sent it**) → **Mark as paid**.
-- **Invoice numbers**: `{YYYY}-{NNN}` gives 2026-001, 2026-002… restarting each January. To carry on
-  from invoices you've already sent, change the format and **Next number** in Settings.
+- **Invoices are identified by date** (the date they were created), not by number.
+- **Delete invoice** (at the bottom of an invoice) removes its Gmail draft if it hasn't been sent, moves
+  the PDF to the Drive bin, and puts its gigs back under *Not invoiced yet*. An email that's already
+  been sent isn't affected.
 
 ## Changing the Apps Script later
 

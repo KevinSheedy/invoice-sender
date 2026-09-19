@@ -11,9 +11,9 @@
 
 const TABLES = {
   Clients: ['id', 'name', 'email', 'defaultFee', 'createdAt'],
-  Gigs: ['id', 'clientId', 'date', 'venue', 'description', 'fee', 'invoiceNumber', 'createdAt'],
-  Invoices: ['number', 'clientId', 'clientName', 'clientEmail', 'issueDate',
-    'currency', 'total', 'gigs', 'status', 'pdfFileId', 'pdfUrl', 'emailedAt',
+  Gigs: ['id', 'clientId', 'date', 'venue', 'description', 'fee', 'invoiceId', 'createdAt'],
+  Invoices: ['id', 'clientId', 'clientName', 'clientEmail', 'issueDate',
+    'currency', 'total', 'gigs', 'status', 'pdfFileId', 'pdfUrl', 'draftId', 'emailedAt',
     'sentAt', 'paidAt', 'createdAt'],
   Settings: ['key', 'value'],
 };
@@ -26,18 +26,21 @@ const DEFAULT_SETTINGS = {
   iban: '',
   bic: '',
   currency: 'EUR',
-  numberFormat: '{YYYY}-{NNN}',
-  nextNumber: '1',
-  numberYear: '',
   defaultDescription: 'Live vocal performance',
   invoiceNote: 'Thank you for booking me!',
-  emailSubject: 'Invoice {number} from {yourName}',
-  emailBody: 'Hi {clientName},\n\nPlease find attached invoice {number} for {total}.\n\nMany thanks,\n{yourName}',
+  emailSubject: 'Invoice {date} from {yourName}',
+  emailBody: 'Hi {clientName},\n\nPlease find attached my invoice for {total}.\n\nMany thanks,\n{yourName}',
   sendMode: 'draft',
 };
 
-// numberYear is bookkeeping for the yearly reset, not something to edit.
-const EDITABLE_SETTINGS = Object.keys(DEFAULT_SETTINGS).filter(k => k !== 'numberYear');
+const EDITABLE_SETTINGS = Object.keys(DEFAULT_SETTINGS);
+
+// Bump SHEET_VERSION when upgradeSheet_() learns something new, so existing sheets get it once.
+const SHEET_VERSION = '2';
+const RENAMED_COLUMNS = {
+  Invoices: { number: 'id' },
+  Gigs: { invoiceNumber: 'invoiceId' },
+};
 
 const ACTIONS = {
   load: () => withLock_(load_),
@@ -45,6 +48,7 @@ const ACTIONS = {
   saveGig: d => withLock_(() => saveGig_(d)),
   deleteClient: d => withLock_(() => deleteClient_(d)),
   deleteGig: d => withLock_(() => deleteGig_(d)),
+  deleteInvoice: d => withLock_(() => deleteInvoice_(d)),
   previewInvoice: d => previewInvoice_(d),
   createInvoice: d => withLock_(() => createInvoice_(d)),
   emailInvoice: d => withLock_(() => emailInvoice_(d)),
@@ -68,6 +72,7 @@ function doPost(e) {
   const action = ACTIONS[request.action];
   if (!action) return json_({ ok: false, error: 'Unknown action: ' + request.action });
   try {
+    withLock_(upgradeSheet_);
     return json_({ ok: true, result: action(request.data || {}) });
   } catch (err) {
     return json_({ ok: false, error: err.message || String(err) });
@@ -121,6 +126,7 @@ function setup() {
   });
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+  upgradeSheet_();
 
   const saved = settingsRows_().map(r => r.key);
   const missing = {};
@@ -135,6 +141,38 @@ function setup() {
   }
   Logger.log('Setup done. Your API key (paste it into the app\'s Settings): ' +
     props.getProperty('API_KEY'));
+}
+
+// Brings a sheet made by an older version of this script up to date. Safe to run more than once.
+function upgradeSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SHEET_VERSION') === SHEET_VERSION) return;
+
+  Object.keys(TABLES).forEach(name => {
+    const sheet = sheet_(name);
+    if (sheet.getLastColumn() === 0) return;
+    const headers = headers_(sheet);
+    const renames = RENAMED_COLUMNS[name] || {};
+    headers.forEach((h, i) => {
+      if (renames[h] && headers.indexOf(renames[h]) === -1) sheet.getRange(1, i + 1).setValues([[renames[h]]]);
+    });
+    const current = headers_(sheet);
+    TABLES[name].filter(col => current.indexOf(col) === -1).forEach(col => {
+      const at = sheet.getLastColumn() + 1;
+      sheet.getRange(1, at).setValues([[col]]).setFontWeight('bold');
+      sheet.getRange(1, at, sheet.getMaxRows(), 1).setNumberFormat('@');
+    });
+  });
+
+  // Invoice numbers were replaced by dates, and due dates were dropped.
+  const s = readSettings_();
+  const patch = {};
+  ['emailSubject', 'emailBody'].forEach(k => {
+    const updated = String(s[k] || '').replace(/,? due by \{dueDate\}/g, '').replace(/\{number\}/g, '{date}');
+    if (updated !== s[k]) patch[k] = updated;
+  });
+  if (Object.keys(patch).length) writeSettings_(patch);
+  props.setProperty('SHEET_VERSION', SHEET_VERSION);
 }
 
 function showApiKey() {
@@ -186,10 +224,10 @@ function saveGig_(d) {
 
   const existing = d.id ? findRow_('Gigs', 'id', d.id) : null;
   if (d.id && !existing) throw new Error('Gig not found – try refreshing');
-  if (existing && existing.invoiceNumber) {
-    throw new Error('This gig is on invoice ' + existing.invoiceNumber + ' so it can\'t be changed');
+  if (existing && existing.invoiceId) {
+    throw new Error('This gig is on an invoice, so it can\'t be changed');
   }
-  const gig = Object.assign({}, existing || { id: newId_(), invoiceNumber: '', createdAt: nowIso_() },
+  const gig = Object.assign({}, existing || { id: newId_(), invoiceId: '', createdAt: nowIso_() },
     { clientId: d.clientId, date, venue, description: str_(d.description), fee: String(fee) });
   writeRow_('Gigs', gig, existing && existing._row);
   return gigOut_(gig);
@@ -199,7 +237,7 @@ function saveGig_(d) {
 function deleteClient_(d) {
   const client = findRow_('Clients', 'id', d.id);
   if (!client) return { deleted: false };
-  const waiting = readTable_('Gigs').filter(g => g.clientId === client.id && !g.invoiceNumber).length;
+  const waiting = readTable_('Gigs').filter(g => g.clientId === client.id && !g.invoiceId).length;
   if (waiting) {
     throw new Error(client.name + ' has ' + waiting + ' gig' + (waiting === 1 ? '' : 's') +
       ' not invoiced yet – invoice or delete ' + (waiting === 1 ? 'it' : 'them') + ' first');
@@ -211,9 +249,7 @@ function deleteClient_(d) {
 function deleteGig_(d) {
   const gig = findRow_('Gigs', 'id', d.id);
   if (!gig) return { deleted: false };
-  if (gig.invoiceNumber) {
-    throw new Error('This gig is on invoice ' + gig.invoiceNumber + ' so it can\'t be deleted');
-  }
+  if (gig.invoiceId) throw new Error('This gig is on an invoice, so it can\'t be deleted');
   sheet_('Gigs').deleteRow(gig._row);
   return { deleted: true };
 }
@@ -221,15 +257,13 @@ function deleteGig_(d) {
 function previewInvoice_(d) {
   const settings = readSettings_();
   const inv = draftInvoice_(d, settings);
-  inv.number = nextNumber_(settings, inv.issueDate, readTable_('Invoices')).number;
-  return { number: inv.number, total: inv.total, html: renderInvoiceHtml_(inv, settings) };
+  return { total: inv.total, html: renderInvoiceHtml_(inv, settings) };
 }
 
 function createInvoice_(d) {
   const settings = readSettings_();
   const inv = draftInvoice_(d, settings);
-  const next = nextNumber_(settings, inv.issueDate, readTable_('Invoices'));
-  inv.number = next.number;
+  inv.id = newId_();
 
   const pdf = renderPdf_(inv, settings);
   const file = invoiceFolder_().createFile(pdf);
@@ -241,8 +275,7 @@ function createInvoice_(d) {
   const gigRows = inv._gigRows;
   delete inv._gigRows;
   const row = writeRow_('Invoices', invoiceRow_(inv));
-  gigRows.forEach(g => writeRow_('Gigs', Object.assign({}, g, { invoiceNumber: inv.number }), g._row));
-  writeSettings_({ nextNumber: String(next.n + 1), numberYear: next.year });
+  gigRows.forEach(g => writeRow_('Gigs', Object.assign({}, g, { invoiceId: inv.id }), g._row));
 
   // The invoice is saved at this point. If Gmail fails, the app offers to retry the email.
   let emailError = '';
@@ -256,9 +289,10 @@ function createInvoice_(d) {
 }
 
 function emailInvoice_(d) {
-  const inv = findRow_('Invoices', 'number', d.number);
+  const inv = findRow_('Invoices', 'id', d.id);
   if (!inv) throw new Error('Invoice not found – try refreshing');
   const settings = readSettings_();
+  if (inv.status === 'draft') deleteDraft_(inv.draftId); // don't leave two drafts behind
   const pdf = DriveApp.getFileById(inv.pdfFileId).getBlob();
   const updated = Object.assign({}, inv, emailPdf_(invoiceOut_(inv), pdf, d.mode || settings.sendMode, settings));
   writeRow_('Invoices', updated, inv._row);
@@ -266,7 +300,7 @@ function emailInvoice_(d) {
 }
 
 function setInvoiceStatus_(d) {
-  const inv = findRow_('Invoices', 'number', d.number);
+  const inv = findRow_('Invoices', 'id', d.id);
   if (!inv) throw new Error('Invoice not found – try refreshing');
   if (['sent', 'paid'].indexOf(d.status) === -1) throw new Error('Unknown status: ' + d.status);
   const updated = Object.assign({}, inv, { status: d.status });
@@ -277,22 +311,30 @@ function setInvoiceStatus_(d) {
   return invoiceOut_(updated);
 }
 
+// Takes the invoice's gigs back to "not invoiced", so they can go on a new invoice.
+function deleteInvoice_(d) {
+  const inv = findRow_('Invoices', 'id', d.id);
+  if (!inv) return { deleted: false };
+  if (inv.status === 'draft') deleteDraft_(inv.draftId);
+  if (inv.pdfFileId) {
+    try {
+      DriveApp.getFileById(inv.pdfFileId).setTrashed(true);
+    } catch (err) {
+      // Already gone from Drive; nothing to tidy up.
+    }
+  }
+  readTable_('Gigs')
+    .filter(g => g.invoiceId === inv.id)
+    .forEach(g => writeRow_('Gigs', Object.assign({}, g, { invoiceId: '' }), g._row));
+  sheet_('Invoices').deleteRow(inv._row);
+  return { deleted: true };
+}
+
 function saveSettings_(d) {
-  const current = readSettings_();
   const patch = {};
   EDITABLE_SETTINGS.forEach(k => {
     if (d[k] !== undefined && d[k] !== null) patch[k] = String(d[k]).trim();
   });
-  if (patch.numberFormat !== undefined && !/\{N+\}/.test(patch.numberFormat)) {
-    throw new Error('The invoice number format needs {N}, {NN}, {NNN} or {NNNN} for the counter');
-  }
-  if (patch.nextNumber !== undefined) {
-    if (!/^\d+$/.test(patch.nextNumber) || Number(patch.nextNumber) < 1) {
-      throw new Error('Next invoice number must be a whole number, 1 or more');
-    }
-    // A hand-set counter applies to this year, so the yearly reset shouldn't undo it.
-    if (patch.nextNumber !== current.nextNumber) patch.numberYear = today_().slice(0, 4);
-  }
   if (patch.currency !== undefined) {
     patch.currency = patch.currency.toUpperCase();
     if (!/^[A-Z]{3}$/.test(patch.currency)) throw new Error('Currency must be a 3-letter code like EUR');
@@ -319,7 +361,7 @@ function draftInvoice_(d, settings) {
     const g = allGigs.find(x => x.id === id);
     if (!g) throw new Error('A gig wasn\'t found – try refreshing');
     if (g.clientId !== client.id) throw new Error('The gig at ' + g.venue + ' belongs to a different client');
-    if (g.invoiceNumber) throw new Error('The gig at ' + g.venue + ' is already on invoice ' + g.invoiceNumber);
+    if (g.invoiceId) throw new Error('The gig at ' + g.venue + ' is already on an invoice');
     return g;
   }).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
@@ -336,26 +378,6 @@ function draftInvoice_(d, settings) {
   };
 }
 
-function nextNumber_(settings, issueDate, invoices) {
-  const year = issueDate.slice(0, 4);
-  let format = settings.numberFormat || DEFAULT_SETTINGS.numberFormat;
-  if (!/\{N+\}/.test(format)) format += '-{NNN}';
-  const yearly = /\{YY(YY)?\}/.test(format);
-  let n = Math.max(1, parseInt(settings.nextNumber, 10) || 1);
-  if (yearly && settings.numberYear && settings.numberYear !== year) n = 1;
-  const taken = invoices.map(i => i.number);
-  let number = formatNumber_(format, n, year);
-  while (taken.indexOf(number) !== -1) number = formatNumber_(format, ++n, year);
-  return { number, n, year };
-}
-
-function formatNumber_(format, n, year) {
-  return format
-    .replace(/\{YYYY\}/g, year)
-    .replace(/\{YY\}/g, year.slice(2))
-    .replace(/\{(N+)\}/g, (m, ns) => String(n).padStart(ns.length, '0'));
-}
-
 function emailPdf_(inv, pdf, mode, settings) {
   const vars = templateVars_(inv, settings);
   const subject = fill_(settings.emailSubject, vars);
@@ -366,18 +388,35 @@ function emailPdf_(inv, pdf, mode, settings) {
     GmailApp.sendEmail(inv.clientEmail, subject, body, options);
     return { status: 'sent', emailedAt: nowIso_(), sentAt: today_() };
   }
-  GmailApp.createDraft(inv.clientEmail, subject, body, options);
-  return { status: 'draft', emailedAt: nowIso_() };
+  const draft = GmailApp.createDraft(inv.clientEmail, subject, body, options);
+  return { status: 'draft', emailedAt: nowIso_(), draftId: draft.getId() };
 }
 
-// Drafts get sent from the Gmail app, so look in Sent Mail to notice when that happened.
+function deleteDraft_(draftId) {
+  if (!draftId) return;
+  try {
+    GmailApp.getDraft(draftId).deleteDraft();
+  } catch (err) {
+    // Already sent or deleted in Gmail.
+  }
+}
+
+// Drafts get sent from the Gmail app, so look in Sent Mail for the invoice's PDF to notice when
+// that happened.
 function refreshDraftStatuses_() {
+  const tz = Session.getScriptTimeZone();
   const drafts = readTable_('Invoices').filter(i => i.status === 'draft');
   drafts.forEach(inv => {
     try {
-      const threads = GmailApp.search('in:sent to:' + inv.clientEmail + ' "' + inv.number + '"', 0, 1);
-      if (threads.length) {
-        const sentAt = Utilities.formatDate(threads[0].getLastMessageDate(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      // Older invoices were named by number, so go by the file's actual name.
+      const pdfName = inv.pdfFileId ? DriveApp.getFileById(inv.pdfFileId).getName() : pdfName_(inv);
+      const since = Utilities.formatDate(new Date(new Date(inv.emailedAt || inv.createdAt).getTime() - 86400000), tz, 'yyyy/MM/dd');
+      const threads = GmailApp.search('in:sent to:' + inv.clientEmail + ' has:attachment after:' + since, 0, 20);
+      const sent = threads
+        .reduce((all, t) => all.concat(t.getMessages()), [])
+        .find(m => m.getAttachments().some(a => a.getName() === pdfName));
+      if (sent) {
+        const sentAt = Utilities.formatDate(sent.getDate(), tz, 'yyyy-MM-dd');
         writeRow_('Invoices', Object.assign({}, inv, { status: 'sent', sentAt }), inv._row);
       }
     } catch (err) {
@@ -388,9 +427,9 @@ function refreshDraftStatuses_() {
 
 function templateVars_(inv, s) {
   return {
-    number: inv.number,
     clientName: inv.clientName,
     total: formatMoney_(inv.total, inv.currency),
+    date: formatDate_(inv.issueDate),
     issueDate: formatDate_(inv.issueDate),
     yourName: s.yourName,
     venues: inv.gigs.map(g => g.venue).filter((v, i, all) => all.indexOf(v) === i).join(', '),
@@ -402,10 +441,13 @@ function fill_(template, vars) {
 }
 
 function renderPdf_(inv, settings) {
-  const name = ('Invoice ' + inv.number + ' - ' + inv.clientName).replace(/[\\/:*?"<>|]/g, '');
   return Utilities.newBlob(renderInvoiceHtml_(inv, settings), MimeType.HTML, 'invoice.html')
     .getAs(MimeType.PDF)
-    .setName(name + '.pdf');
+    .setName(pdfName_(inv));
+}
+
+function pdfName_(inv) {
+  return ('Invoice ' + inv.issueDate + ' - ' + inv.clientName).replace(/[\\/:*?"<>|]/g, '') + '.pdf';
 }
 
 function renderInvoiceHtml_(inv, s) {
@@ -456,7 +498,6 @@ function renderInvoiceHtml_(inv, s) {
     '<table class="section"><tr>' +
       '<td><div class="heading">Bill to</div><strong>' + e(inv.clientName) + '</strong><br>' + e(inv.clientEmail) + '</td>' +
       '<td style="width:240px"><table>' +
-        '<tr><td class="label">Invoice no.</td><td><strong>' + e(inv.number) + '</strong></td></tr>' +
         '<tr><td class="label">Date</td><td>' + e(formatDate_(inv.issueDate)) + '</td></tr>' +
       '</table></td>' +
     '</tr></table>' +
@@ -569,7 +610,7 @@ function clientOut_(r) {
 
 function gigOut_(r) {
   return { id: r.id, clientId: r.clientId, date: r.date, venue: r.venue, description: r.description,
-    fee: Number(r.fee), invoiceNumber: r.invoiceNumber || '', createdAt: r.createdAt };
+    fee: Number(r.fee), invoiceId: r.invoiceId || '', createdAt: r.createdAt };
 }
 
 function invoiceOut_(r) {

@@ -83,6 +83,7 @@ export function createBackend({ driveUrlBase = 'https://drive.example/file/', lo
   const mail = { drafts: [], sent: [] };
   const spreadsheet = new Spreadsheet('sheet-1');
   let folders = 0;
+  let drafts = 0;
 
   const globals = {
     console,
@@ -120,26 +121,35 @@ export function createBackend({ driveUrlBase = 'https://drive.example/file/', lo
       getFileById: id => {
         const f = files.get(id);
         if (!f) throw new Error('No file');
-        return { getBlob: () => f.blob };
+        return { getBlob: () => f.blob, getName: () => f.blob.getName(), setTrashed: v => { f.trashed = v; } };
       },
     },
     Utilities: {
       newBlob: (data, type, name) => new Blob(data, type, name),
       getUuid: () => randomUUID(),
       formatDate: (date, tz, format) => {
-        if (format !== 'yyyy-MM-dd') throw new Error('Fake formatDate only supports yyyy-MM-dd');
-        return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+        if (!/^yyyy([-/])MM\1dd$/.test(format)) throw new Error('Fake formatDate only supports yyyy-MM-dd and yyyy/MM/dd');
+        const iso = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+        return iso.replace(/-/g, format[4]);
       },
     },
     GmailApp: {
-      createDraft: (to, subject, body, options) => { mail.drafts.push({ to, subject, body, options }); },
-      sendEmail: (to, subject, body, options) => { mail.sent.push({ to, subject, body, options, date: new Date() }); },
+      createDraft: (to, subject, body, options) => {
+        const id = 'draft-' + ++drafts;
+        mail.drafts.push({ id, to, subject, body, options });
+        return { getId: () => id };
+      },
+      getDraft: id => {
+        if (!mail.drafts.some(d => d.id === id)) throw new Error('No draft');
+        return { deleteDraft: () => { mail.drafts = mail.drafts.filter(d => d.id !== id); } };
+      },
+      sendEmail: (to, subject, body, options) => { mail.sent.push({ to, subject, body, options, date: context.now_() }); },
       search: query => {
-        const m = query.match(/^in:sent to:(\S+) "(.+)"$/);
+        const m = query.match(/^in:sent to:(\S+) has:attachment after:\d{4}\/\d{2}\/\d{2}$/);
         if (!m) throw new Error('Fake search does not understand: ' + query);
         return mail.sent
-          .filter(s => s.to === m[1] && (s.subject + s.body).includes(m[2]))
-          .map(s => ({ getLastMessageDate: () => s.date }));
+          .filter(s => s.to === m[1])
+          .map(s => ({ getMessages: () => [{ getDate: () => s.date, getAttachments: () => s.options.attachments }] }));
       },
     },
   };
