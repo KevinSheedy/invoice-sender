@@ -28,7 +28,7 @@ test('setup creates tables, settings and an API key', () => {
   assert.deepEqual(names, ['Clients', 'Gigs', 'Invoices', 'Settings']);
   assert.match(b.props.get('API_KEY'), /^[0-9a-f]{32}$/);
   const { settings } = ok(b.call('load'));
-  assert.equal(settings.emailSubject, 'Invoice {date} from {yourName}');
+  assert.equal(settings.emailSubject, 'Invoice for performance at {venues} {gigDates}');
 
   b.context.setup(); // running it again is harmless
   assert.equal(b.spreadsheet.getSheetByName('Settings').getLastRow(), 1 + 12);
@@ -86,7 +86,7 @@ test('creates an invoice as a Gmail draft with the PDF attached', () => {
   const draft = b.mail.drafts[0];
   assert.equal(invoice.draftId, draft.id);
   assert.equal(draft.to, 'bookings@crown.ie');
-  assert.equal(draft.subject, 'Invoice 19 Sep 2026 from Kev <Singer>');
+  assert.equal(draft.subject, 'Invoice for performance at Venue 0, Venue 1 2026-09-10, 2026-09-11');
   assert.match(draft.body, /Please find attached my invoice for €550\.00\.\n/);
   assert.equal(draft.options.attachments[0].getContentType(), 'application/pdf');
   assert.equal(draft.options.attachments[0].getName(), 'Invoice 2026-09-19 - The Crown.pdf');
@@ -223,7 +223,7 @@ test('upgrades a sheet made by the numbered-invoice version', () => {
   const state = ok(b.call('load'));
   assert.equal(state.invoices[0].id, '2026-001');
   assert.equal(state.gigs[0].invoiceId, '2026-001');
-  assert.equal(state.settings.emailSubject, 'Invoice {date} from {yourName}');
+  assert.equal(state.settings.emailSubject, 'Invoice for performance at {venues} {gigDates}');
   assert.equal(state.settings.emailBody, 'Please find attached invoice {date} for {total}.');
   assert.equal(sheet('Invoices').data[0][0], 'id');
   assert.ok(sheet('Invoices').data[0].includes('draftId'));
@@ -231,6 +231,18 @@ test('upgrades a sheet made by the numbered-invoice version', () => {
   // Deleting an upgraded invoice frees its gig.
   ok(b.call('deleteInvoice', { id: '2026-001' }));
   assert.equal(ok(b.call('load')).gigs[0].invoiceId, '');
+});
+
+test('fills the subject for a single gig, and keeps a customised subject', () => {
+  const b = setUp();
+  const client = ok(b.call('saveClient', { name: 'St Patrick\'s', email: 'music@stpatricks.ie' }));
+  const gig = ok(b.call('saveGig', { clientId: client.id, date: '2026-08-26', venue: 'St Patrick\'s Cathedral', fee: 300 }));
+  ok(b.call('createInvoice', { clientId: client.id, gigIds: [gig.id] }));
+  assert.equal(b.mail.drafts[0].subject, 'Invoice for performance at St Patrick\'s Cathedral 2026-08-26');
+
+  ok(b.call('saveSettings', { emailSubject: 'My own subject {date}' }));
+  b.props.delete('SHEET_VERSION');
+  assert.equal(ok(b.call('load')).settings.emailSubject, 'My own subject {date}');
 });
 
 test('validates settings and ignores unknown keys', () => {

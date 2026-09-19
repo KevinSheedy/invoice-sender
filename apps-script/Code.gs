@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS = {
   currency: 'EUR',
   defaultDescription: 'Live vocal performance',
   invoiceNote: 'Thank you for booking me!',
-  emailSubject: 'Invoice {date} from {yourName}',
+  emailSubject: 'Invoice for performance at {venues} {gigDates}',
   emailBody: 'Hi {clientName},\n\nPlease find attached my invoice for {total}.\n\nMany thanks,\n{yourName}',
   sendMode: 'draft',
 };
@@ -36,7 +36,7 @@ const DEFAULT_SETTINGS = {
 const EDITABLE_SETTINGS = Object.keys(DEFAULT_SETTINGS);
 
 // Bump SHEET_VERSION when upgradeSheet_() learns something new, so existing sheets get it once.
-const SHEET_VERSION = '2';
+const SHEET_VERSION = '3';
 const RENAMED_COLUMNS = {
   Invoices: { number: 'id' },
   Gigs: { invoiceNumber: 'invoiceId' },
@@ -168,7 +168,9 @@ function upgradeSheet_() {
   const s = readSettings_();
   const patch = {};
   ['emailSubject', 'emailBody'].forEach(k => {
-    const updated = String(s[k] || '').replace(/,? due by \{dueDate\}/g, '').replace(/\{number\}/g, '{date}');
+    let updated = String(s[k] || '').replace(/,? due by \{dueDate\}/g, '').replace(/\{number\}/g, '{date}');
+    // Move the old default subject to the new one, but leave a customised subject alone.
+    if (k === 'emailSubject' && updated === 'Invoice {date} from {yourName}') updated = DEFAULT_SETTINGS.emailSubject;
     if (updated !== s[k]) patch[k] = updated;
   });
   if (Object.keys(patch).length) writeSettings_(patch);
@@ -433,6 +435,7 @@ function templateVars_(inv, s) {
     issueDate: formatDate_(inv.issueDate),
     yourName: s.yourName,
     venues: inv.gigs.map(g => g.venue).filter((v, i, all) => all.indexOf(v) === i).join(', '),
+    gigDates: inv.gigs.map(g => g.date).filter((v, i, all) => all.indexOf(v) === i).sort().join(', '),
   };
 }
 

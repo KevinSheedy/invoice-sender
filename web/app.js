@@ -823,7 +823,7 @@ function settingsView() {
         ${area('emailBody', 'Message', 6)}
       </div>
       <p class="hint">You can use <code>{clientName}</code> <code>{date}</code> <code>{total}</code>
-        <code>{venues}</code> <code>{yourName}</code>.</p>
+        <code>{venues}</code> <code>{gigDates}</code> <code>{yourName}</code>.</p>
 
       <div class="stack"><button class="btn primary" type="submit">Save settings</button></div>
     </form>`;
