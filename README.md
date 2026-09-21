@@ -87,17 +87,6 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 - The subject line is `Invoice for performance at {venues} {gigDates}`, for example
   *Invoice for performance at St Patrick's Cathedral 2026-08-26*.
 
-### The mailto trial
-
-For invoices that go in the email body there's a second button, **Open in Mail app (trial)**. It builds
-the same invoice as plain text on the phone and opens it with a `mailto:` link, so Google isn't
-involved at all: no API key, no draft, no backend call. It needs Gmail set as the default mail app
-(iOS **Settings → Apps → Mail → Default Mail App**) to land in Gmail rather than Apple Mail.
-
-Trade-offs: plain text only, no layout or PDF, and nothing appears in Gmail until you send it. To drop
-the trial, remove the `#mailto` button and its handler in `web/app.js`, plus `mailtoParts()`,
-`invoiceProblem()` and `fill()`; the `templates` block in the script's `config_()` feeds it.
-
 ## Changing the Apps Script
 
 ```sh

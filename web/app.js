@@ -183,71 +183,6 @@ function resetForm() {
 }
 
 // ---------------------------------------------------------------------------
-// Trial: hand the invoice to the iOS Mail app as a mailto: link, with no call to Google.
-// Only for invoices that go in the email body, since mailto can't carry an attachment.
-
-function fill(template, vars) {
-  return String(template || '').replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
-}
-
-function mailtoParts() {
-  const templates = (state.config && state.config.templates) || {};
-  const client = state.clientId === OTHER ? state.custom : currentClient();
-  const gigs = state.gigs
-    .map(g => ({ date: g.date, venue: g.venue.trim(), fee: Number(String(g.fee).replace(/[€£$,\s]/g, '')) }))
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const unique = list => list.filter((v, i, all) => all.indexOf(v) === i);
-  const vars = {
-    clientName: client.name,
-    yourName: details.name,
-    total: money(gigs.reduce((sum, g) => sum + g.fee, 0)),
-    date: fmtDate(today()),
-    venues: unique(gigs.map(g => g.venue)).join(', '),
-    gigDates: unique(gigs.map(g => g.date)).sort().join(', '),
-  };
-
-  const lines = [fill(templates.greeting, vars), '', 'INVOICE – ' + vars.date, ''];
-  gigs.forEach(g => {
-    lines.push(fmtDate(g.date) + ' – ' + fill(templates.lineDescription, { venue: g.venue }) + ' – ' + money(g.fee));
-  });
-  lines.push('', 'Total: ' + vars.total);
-  [['Account name', details.accountName], ['IBAN', details.iban]]
-    .filter(p => p[1])
-    .forEach((p, i) => {
-      if (i === 0) lines.push('');
-      lines.push(p[0] + ': ' + p[1]);
-    });
-  lines.push('', fill(templates.signOff, vars));
-
-  return { to: client.email, subject: fill(templates.subject, vars), body: lines.join('\n') };
-}
-
-// The same checks the backend would make, so the trial fails in the app rather than in Mail.
-function invoiceProblem() {
-  if (!details.name.trim()) return 'Add your name in Settings first';
-  const client = state.clientId === OTHER ? state.custom : currentClient();
-  if (!client || !client.name.trim()) return 'Enter the client\'s name';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(client.email || '')) return 'Enter a valid email address for the client';
-  if (!state.gigs.length) return 'Add at least one gig';
-  for (const g of state.gigs) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(g.date)) return 'Enter the date of each gig';
-    if (!g.venue.trim()) return 'Enter the venue for each gig';
-    const fee = Number(String(g.fee).replace(/[€£$,\s]/g, ''));
-    if (String(g.fee).trim() === '' || !isFinite(fee) || fee < 0) return 'Enter the fee for each gig, like 250 or 250.50';
-  }
-  return '';
-}
-
-// Same wording as the invoice Google renders ("21 Sep 2026", not "21 Sept 2026").
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function fmtDate(iso) {
-  const p = String(iso || '').split('-').map(Number);
-  if (p.length !== 3 || !p[0]) return String(iso || '');
-  return p[2] + ' ' + MONTHS[p[1] - 1] + ' ' + p[0];
-}
-
-// ---------------------------------------------------------------------------
 // Views
 
 function render() {
@@ -342,11 +277,7 @@ function formHtml() {
     <div class="stack">
       <button class="btn" id="preview" type="button">Preview</button>
       <button class="btn primary big" id="create" type="button">Create Gmail draft</button>
-      ${method() === 'body' ? '<button class="btn" id="mailto" type="button">Open in Mail app (trial)</button>' : ''}
     </div>
-    ${method() === 'body' ? `<p class="hint">The trial button skips Google altogether: it opens a ready-made
-      email in whichever app handles mail on this phone (set Gmail as the default in iOS Settings → Apps → Mail).
-      Plain text only, no formatting.</p>` : ''}
     <p class="hint">Goes to ${custom ? h(state.custom.email || 'the address above') : h(client ? client.name + ' <' + client.email + '>' : '')}.
       It'll be waiting in your Gmail drafts for you to check and send.</p>`;
 }
@@ -472,21 +403,6 @@ function bindForm(root) {
     const res = await busy(e.currentTarget, 'Preparing…', () => api('preview', invoiceData()));
     if (res) openSheet(res.html);
   });
-  const mailtoButton = root.querySelector('#mailto');
-  if (mailtoButton) {
-    mailtoButton.addEventListener('click', () => {
-      const problem = invoiceProblem();
-      if (problem) {
-        toast(problem, true);
-        return;
-      }
-      const { to, subject, body } = mailtoParts();
-      rememberVenues();
-      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}` +
-        `&body=${encodeURIComponent(body)}`;
-    });
-  }
-
   root.querySelector('#create').addEventListener('click', async e => {
     const res = await busy(e.currentTarget, 'Creating…', () => api('createDraft', invoiceData()));
     if (!res) return;
