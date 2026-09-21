@@ -59,15 +59,6 @@ export function createBackend({ log = () => {} } = {}) {
     context,
     props,
     drafts,
-    // CONFIG is a const, so it isn't a property of the sandbox; reach it inside the context.
-    configure(patch) {
-      vm.runInContext(`(function (patch) {
-        Object.keys(patch).forEach(function (k) {
-          if (patch[k] && typeof patch[k] === 'object' && !Array.isArray(patch[k])) Object.assign(CONFIG[k], patch[k]);
-          else CONFIG[k] = patch[k];
-        });
-      })(${JSON.stringify(patch)})`, context);
-    },
     setNow(isoString) {
       vm.runInContext(`now_ = function () { return new Date(${JSON.stringify(isoString)}); };`, context);
     },

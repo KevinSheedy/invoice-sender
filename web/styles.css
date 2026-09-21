@@ -83,7 +83,8 @@ main {
   justify-content: space-between;
   align-items: baseline;
 }
-.section-title:first-child { margin-top: 2px; }
+#view > .section-title:first-child,
+#view > :first-child > .section-title:first-child { margin-top: 2px; }
 .section-title button { text-transform: none; letter-spacing: 0; font-size: 15px; }
 
 .card {

@@ -16,11 +16,6 @@ const TYPES = {
 
 const backend = createBackend({ log: m => console.log(m) });
 backend.props.set('API_KEY', 'dev');
-// Stands in for the details you put in CONFIG in Code.gs.
-backend.configure({
-  you: { name: 'Sam Singer', email: 'sam@example.com', phone: '087 123 4567' },
-  payment: { accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112 3456 78', bic: 'BOFIIE2D' },
-});
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);

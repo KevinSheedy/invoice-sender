@@ -6,9 +6,12 @@
 const CONFIG_KEY = 'gigInvoices.connection';
 const CACHE_KEY = 'gigInvoices.config';
 const VENUES_KEY = 'gigInvoices.venues';
+const DETAILS_KEY = 'gigInvoices.details';
 const OTHER = '__other';
 
 let connection = readLocal(CONFIG_KEY) || { url: '', key: '' };
+// Your name and bank details, kept on this phone and sent with each invoice.
+let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '', bic: '' };
 const state = {
   config: readLocal(CACHE_KEY),
   error: '',
@@ -47,6 +50,10 @@ function writeLocal(key, value) {
 
 function isConnected() {
   return Boolean(connection.url && connection.key);
+}
+
+function hasDetails() {
+  return Boolean(details.name.trim());
 }
 
 async function api(action, data) {
@@ -139,7 +146,7 @@ function selectClient(id) {
 }
 
 function invoiceData() {
-  const data = { gigs: state.gigs, method: method() };
+  const data = { me: details, gigs: state.gigs, method: method() };
   if (state.clientId === OTHER) {
     data.clientName = state.custom.name;
     data.clientEmail = state.custom.email;
@@ -182,13 +189,15 @@ function render() {
 }
 
 function formHtml() {
-  if (!isConnected()) {
+  if (!isConnected() || !hasDetails()) {
     return `
       <div class="card pad">
         <p style="margin-top:0"><strong>Welcome!</strong> This app drafts gig invoices in your own Gmail.</p>
-        <p style="margin-bottom:0">Connect it to your Apps Script web app to get started.</p>
+        <p style="margin-bottom:0">${isConnected()
+          ? 'Add your name and bank details – they go on every invoice, and stay on this phone.'
+          : 'Connect it to your Apps Script web app, then add the details that go on your invoices.'}</p>
       </div>
-      <div class="stack"><a class="btn primary big" href="#/settings">Connect</a></div>`;
+      <div class="stack"><a class="btn primary big" href="#/settings">${isConnected() ? 'Add your details' : 'Get started'}</a></div>`;
   }
   if (!state.config) {
     return (state.error ? `<div class="error">${h(state.error)}</div>` : '') +
@@ -278,8 +287,28 @@ function doneHtml() {
 }
 
 function settingsHtml() {
+  const field = (name, label, attrs = '') =>
+    `<label class="field"><span>${label}</span><input name="${name}" value="${h(details[name])}" ${attrs}></label>`;
   return `
+    <form id="details-form" novalidate>
+      <div class="section-title">Your details</div>
+      <div class="card">
+        ${field('name', 'Name', 'autocapitalize="words" enterkeyhint="next"')}
+        ${field('email', 'Email', 'type="email" inputmode="email" autocapitalize="off" autocorrect="off"')}
+        ${field('phone', 'Phone', 'type="tel"')}
+      </div>
+      <div class="card">
+        ${field('accountName', 'Account name', 'autocapitalize="words"')}
+        ${field('iban', 'IBAN', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
+        ${field('bic', 'BIC', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
+      </div>
+      <div class="stack"><button class="btn ${hasDetails() ? '' : 'primary'}" type="submit">Save my details</button></div>
+      <p class="hint">These go at the top of the invoice and in its payment box. They're stored on this
+        phone only – never in Google or on GitHub. Leave a line blank to keep it off the invoice.</p>
+    </form>
+
     <form id="connect-form" novalidate>
+      <div class="section-title">Connection</div>
       <div class="card">
         <label class="field"><span>Web app URL</span>
           <input name="url" type="url" value="${h(connection.url)}" placeholder="https://script.google.com/macros/s/…/exec"
@@ -295,7 +324,7 @@ function settingsHtml() {
       </div>
     </form>
     <p class="hint">Both come from the Apps Script setup steps in the README. They're stored only on this phone.</p>
-    <p class="hint">Your details, your clients and the email wording live in <code>CONFIG</code> at the top of
+    <p class="hint">Your clients and the email wording live in <code>CONFIG</code> at the top of
       <code>Code.gs</code>. Change them there and deploy.</p>`;
 }
 
@@ -364,6 +393,21 @@ function bindDone(root) {
 }
 
 function bindSettings(root) {
+  const detailsForm = root.querySelector('#details-form');
+  detailsForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const entered = Object.fromEntries(new FormData(detailsForm));
+    if (!String(entered.name).trim()) {
+      toast('Your name goes at the top of the invoice, so it\'s needed', true);
+      return;
+    }
+    details = entered;
+    writeLocal(DETAILS_KEY, details);
+    toast('Details saved');
+    if (isConnected()) location.hash = '#/';
+    else render();
+  });
+
   const form = root.querySelector('#connect-form');
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -385,7 +429,8 @@ function bindSettings(root) {
     writeLocal(CACHE_KEY, config);
     selectClient(config.clients[0] ? config.clients[0].id : OTHER);
     toast('Connected');
-    location.hash = '#/';
+    if (hasDetails()) location.hash = '#/';
+    else render();
   });
 }
 

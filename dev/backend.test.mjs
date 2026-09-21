@@ -6,11 +6,6 @@ function setUp() {
   const b = createBackend();
   b.setNow('2026-09-21T21:30:00Z');
   b.context.setup();
-  // Stand-in for the details you fill into CONFIG in Code.gs.
-  b.configure({
-    you: { name: 'Sam Singer', email: 'sam@example.com', phone: '087 123 4567' },
-    payment: { accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112', bic: 'BOFIIE2D' },
-  });
   return b;
 }
 
@@ -20,6 +15,13 @@ function ok(res) {
 }
 
 const gig = (over = {}) => ({ date: '2026-08-26', venue: "St Patrick's Cathedral", fee: 125, ...over });
+
+// What the app sends from its Settings screen.
+const ME = {
+  name: 'Sam Singer', email: 'sam@example.com', phone: '087 123 4567',
+  accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112', bic: 'BOFIIE2D',
+};
+const call = (b, action, data) => b.call(action, { me: ME, ...data });
 
 test('setup makes an API key, and a wrong key is refused', () => {
   const b = setUp();
@@ -31,9 +33,8 @@ test('setup makes an API key, and a wrong key is refused', () => {
 
 test('config lists the built-in clients', () => {
   const b = setUp();
-  const { clients, currency, yourName } = ok(b.call('config'));
+  const { clients, currency } = ok(b.call('config'));
   assert.equal(currency, 'EUR');
-  assert.equal(yourName, 'Sam Singer');
   assert.deepEqual(clients, [
     { id: 'john', name: 'John McGlynn', email: 'angel@anuna.ie', defaultFee: 125, method: 'body' },
     { id: 'ardu', name: 'Ardú', email: 'ardumusic@gmail.com', defaultFee: null, method: 'pdf' },
@@ -42,7 +43,7 @@ test('config lists the built-in clients', () => {
 
 test('drafts an invoice in the email body for John', () => {
   const b = setUp();
-  const res = ok(b.call('createDraft', { clientId: 'john', gigs: [gig()] }));
+  const res = ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()] }));
   assert.equal(res.method, 'body', 'falls back to the client\'s own method');
   assert.equal(res.to, 'angel@anuna.ie');
   assert.equal(res.subject, "Invoice for performance at St Patrick's Cathedral 2026-08-26");
@@ -68,7 +69,7 @@ test('drafts an invoice in the email body for John', () => {
 
 test('drafts an invoice as a PDF for Ardú', () => {
   const b = setUp();
-  const res = ok(b.call('createDraft', { clientId: 'ardu', gigs: [gig({ venue: 'Christ Church', fee: '€300' })] }));
+  const res = ok(call(b, 'createDraft', { clientId: 'ardu', gigs: [gig({ venue: 'Christ Church', fee: '€300' })] }));
   assert.equal(res.method, 'pdf');
   assert.equal(res.to, 'ardumusic@gmail.com');
   assert.equal(res.total, 300);
@@ -84,15 +85,15 @@ test('drafts an invoice as a PDF for Ardú', () => {
 
 test('the method can be switched per invoice', () => {
   const b = setUp();
-  ok(b.call('createDraft', { clientId: 'john', gigs: [gig()], method: 'pdf' }));
+  ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], method: 'pdf' }));
   assert.equal(b.drafts[0].options.attachments.length, 1);
-  ok(b.call('createDraft', { clientId: 'ardu', gigs: [gig()], method: 'body' }));
+  ok(call(b, 'createDraft', { clientId: 'ardu', gigs: [gig()], method: 'body' }));
   assert.ok(b.drafts[1].options.htmlBody);
 });
 
 test('takes a one-off client, defaulting to a PDF', () => {
   const b = setUp();
-  const res = ok(b.call('createDraft', {
+  const res = ok(call(b, 'createDraft', {
     clientName: 'The Crown Bar', clientEmail: 'bookings@crownbar.ie', gigs: [gig({ venue: 'The Crown Bar', fee: 250 })],
   }));
   assert.equal(res.to, 'bookings@crownbar.ie');
@@ -102,7 +103,7 @@ test('takes a one-off client, defaulting to a PDF', () => {
 
 test('bills several gigs on one invoice, oldest first', () => {
   const b = setUp();
-  const res = ok(b.call('createDraft', {
+  const res = ok(call(b, 'createDraft', {
     clientId: 'ardu',
     gigs: [gig({ date: '2026-09-12', venue: 'Whelan\'s', fee: 200 }), gig({ date: '2026-09-05', venue: 'The Crown', fee: 250 })],
   }));
@@ -115,19 +116,32 @@ test('bills several gigs on one invoice, oldest first', () => {
 
 test('rejects incomplete invoices', () => {
   const b = setUp();
-  assert.match(b.call('createDraft', { clientId: 'john', gigs: [] }).error, /at least one gig/);
-  assert.match(b.call('createDraft', { clientId: 'nope', gigs: [gig()] }).error, /Unknown client/);
-  assert.match(b.call('createDraft', { clientId: 'john', gigs: [gig({ date: '' })] }).error, /date of each gig/);
-  assert.match(b.call('createDraft', { clientId: 'john', gigs: [gig({ venue: '' })] }).error, /venue for each gig/);
-  assert.match(b.call('createDraft', { clientId: 'john', gigs: [gig({ fee: 'lots' })] }).error, /fee for each gig/);
-  assert.match(b.call('createDraft', { clientName: 'X', clientEmail: 'nope', gigs: [gig()] }).error, /valid email/);
-  assert.match(b.call('createDraft', { clientEmail: 'x@y.ie', gigs: [gig()] }).error, /client's name/);
+  assert.match(call(b, 'createDraft', { clientId: 'john', gigs: [] }).error, /at least one gig/);
+  assert.match(call(b, 'createDraft', { clientId: 'nope', gigs: [gig()] }).error, /Unknown client/);
+  assert.match(call(b, 'createDraft', { clientId: 'john', gigs: [gig({ date: '' })] }).error, /date of each gig/);
+  assert.match(call(b, 'createDraft', { clientId: 'john', gigs: [gig({ venue: '' })] }).error, /venue for each gig/);
+  assert.match(call(b, 'createDraft', { clientId: 'john', gigs: [gig({ fee: 'lots' })] }).error, /fee for each gig/);
+  assert.match(call(b, 'createDraft', { clientName: 'X', clientEmail: 'nope', gigs: [gig()] }).error, /valid email/);
+  assert.match(call(b, 'createDraft', { clientEmail: 'x@y.ie', gigs: [gig()] }).error, /client's name/);
   assert.equal(b.drafts.length, 0, 'nothing is drafted when something is wrong');
+});
+
+test('needs your name before it will draft anything', () => {
+  const b = setUp();
+  assert.match(b.call('createDraft', { clientId: 'john', gigs: [gig()] }).error, /your name and bank details/);
+  assert.match(b.call('createDraft', { me: { iban: 'IE12' }, clientId: 'john', gigs: [gig()] }).error, /your name/);
+  assert.equal(b.drafts.length, 0);
+
+  // Only the name is required; the rest just stay off the invoice.
+  const res = ok(b.call('createDraft', { me: { name: 'Sam Singer' }, clientId: 'ardu', gigs: [gig()] }));
+  assert.equal(res.to, 'ardumusic@gmail.com');
+  const pdf = b.drafts[0].options.attachments[0].getDataAsString();
+  assert.doesNotMatch(pdf, /Payment details/);
 });
 
 test('preview returns the same invoice without drafting anything', () => {
   const b = setUp();
-  const res = ok(b.call('preview', { clientId: 'john', gigs: [gig()] }));
+  const res = ok(call(b, 'preview', { clientId: 'john', gigs: [gig()] }));
   assert.equal(res.subject, "Invoice for performance at St Patrick's Cathedral 2026-08-26");
   assert.equal(res.total, 125);
   assert.match(res.html, /€125\.00/);

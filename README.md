@@ -7,19 +7,28 @@ A one-screen iPhone app that leaves a gig invoice in your Gmail drafts. You chec
 - **Google side** (`apps-script/Code.gs`): renders the invoice and creates the draft in your own Gmail.
 
 **Nothing is stored.** No spreadsheet, no Drive files, no list of past invoices. Your Gmail Sent folder
-is the record. Your details and your clients live in `CONFIG` at the top of `Code.gs`, which is only in
-your Google account and on your Mac, never in this repo.
+is the record. Your own name and bank details are typed into the app on first use and kept on your
+phone; your clients live in `CONFIG` at the top of `Code.gs`, in your Google account and on your Mac,
+never in this repo.
 
 ```
 iPhone app  ──(web app URL + API key)──►  Apps Script  ──►  Gmail draft (PDF attached, or
                                                             the invoice in the email body)
 ```
 
-## Your details and clients
+## Your details
 
-Everything configurable is the `CONFIG` block at the top of [`apps-script/Code.gs`](apps-script/Code.gs):
-your name and contact details, your bank details, your clients, and the email wording. Change it there
-and run `npm run deploy:script`. The app picks up new clients the next time it loads.
+On first use the app asks for your name, email, phone, account name, IBAN and BIC. They go at the top
+of the invoice and in its payment box. They're saved in the browser storage of the Home Screen app, so
+they never reach Google or GitHub, and they're sent with each invoice you draft. Only the name is
+required; blank lines are simply left off. Change them any time under ⚙️, and note they'll need
+re-entering if you delete the app or move to a new phone.
+
+## Clients
+
+Clients and the email wording are the `CONFIG` block at the top of
+[`apps-script/Code.gs`](apps-script/Code.gs). Change it there and run `npm run deploy:script`. The app
+picks up new clients the next time it loads.
 
 ```js
 clients: [
@@ -38,7 +47,7 @@ clients: [
 ### 1. Apps Script (about 10 minutes, on a laptop)
 
 1. Create a script at [script.new](https://script.new) and name it **Gig Invoices**.
-2. Paste in [`apps-script/Code.gs`](apps-script/Code.gs), fill in `CONFIG`, and save.
+2. Paste in [`apps-script/Code.gs`](apps-script/Code.gs), edit the `clients` in `CONFIG`, and save.
 3. Click ⚙️ **Project Settings** and set **Time zone** to *(GMT+01:00) Dublin*, so invoice dates are right.
 4. Pick **`setup`** in the function dropdown and click **Run**. Google asks for permission to use Gmail.
    Because this is your own script rather than a published app, it says *"Google hasn't verified this
@@ -62,8 +71,9 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 ### 3. Install it on your iPhone
 
 1. Open that URL in **Safari**, then **Share → Add to Home Screen**.
-2. Open **Invoices** from the Home Screen, tap ⚙️, paste the **web app URL** and **API key**, and tap
-   **Connect**. (Do this inside the Home Screen app: it keeps its own storage, separate from Safari.)
+2. Open **Invoices** from the Home Screen, tap ⚙️, paste the **web app URL** and **API key**, tap
+   **Connect**, then fill in your own details and tap **Save my details**. (Do this inside the Home
+   Screen app: it keeps its own storage, separate from Safari.)
 3. Draft one invoice to yourself and check it looks right in Gmail.
 
 ## Using it
@@ -112,7 +122,7 @@ made are listed at `/fake-gmail`, and the newest one renders at `/fake-gmail/las
 
 | Path | What it is |
 | --- | --- |
-| `apps-script/Code.gs` | CONFIG, the invoice renderer and the Gmail draft |
+| `apps-script/Code.gs` | Clients and wording, the invoice renderer and the Gmail draft |
 | `apps-script/appsscript.json` | Apps Script project settings (time zone, web app access) |
 | `web/` | The phone app: `index.html`, `app.js`, `styles.css`, manifest, service worker, icons |
 | `dev/` | Fake Gmail, the tests, the dev server and the deploy script |

@@ -5,23 +5,12 @@
  * body of the email. Nothing is stored: no spreadsheet, no Drive files, no history. Your sent
  * mail is the record.
  *
- * Your details and your clients live in CONFIG below. Edit them here, then run
+ * Your own name and bank details are kept in the phone app and arrive with each request. Your
+ * clients and the email wording live in CONFIG below; edit them here, then run
  * `npm run deploy:script` (see README).
  */
 
 const CONFIG = {
-  // Shown at the top of the invoice, and used as the Gmail sender name.
-  you: {
-    name: '',
-    email: '',
-    phone: '',
-  },
-  // Shown in the payment box. Leave a line blank to hide it.
-  payment: {
-    accountName: '',
-    iban: '',
-    bic: '',
-  },
   currency: 'EUR',
 
   // method: 'body' puts the invoice in the email itself, 'pdf' attaches it as a PDF. The app
@@ -114,7 +103,6 @@ function resetApiKey() {
 function config_() {
   return {
     currency: CONFIG.currency,
-    yourName: CONFIG.you.name,
     clients: CONFIG.clients.map(c => ({
       id: c.id,
       name: c.name,
@@ -140,8 +128,7 @@ function createDraft_(d) {
   const inv = buildInvoice_(d);
   const subject = subject_(inv);
   const vars = vars_(inv);
-  const options = {};
-  if (CONFIG.you.name) options.name = CONFIG.you.name;
+  const options = { name: inv.me.name };
   let body;
 
   if (inv.method === 'pdf') {
@@ -165,17 +152,34 @@ function createDraft_(d) {
 // Building an invoice
 
 function buildInvoice_(d) {
+  const me = resolveMe_(d);
   const client = resolveClient_(d);
   const gigs = (Array.isArray(d.gigs) ? d.gigs : []).map(parseGig_)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (!gigs.length) throw new Error('Add at least one gig');
   return {
+    me,
     client,
     gigs,
     method: ['pdf', 'body'].indexOf(d.method) === -1 ? client.method : d.method,
     date: today_(),
     currency: CONFIG.currency,
     total: round2_(gigs.reduce((sum, g) => sum + g.fee, 0)),
+  };
+}
+
+// Your details come from the app's Settings screen, which keeps them on your phone.
+function resolveMe_(d) {
+  const me = d.me || {};
+  const name = str_(me.name);
+  if (!name) throw new Error('Add your name and bank details in Settings first');
+  return {
+    name,
+    email: str_(me.email),
+    phone: str_(me.phone),
+    accountName: str_(me.accountName),
+    iban: str_(me.iban),
+    bic: str_(me.bic),
   };
 }
 
@@ -207,7 +211,7 @@ function subject_(inv) {
 function vars_(inv) {
   return {
     clientName: inv.client.name,
-    yourName: CONFIG.you.name,
+    yourName: inv.me.name,
     total: formatMoney_(inv.total, inv.currency),
     date: formatDate_(inv.date),
     venues: unique_(inv.gigs.map(g => g.venue)).join(', '),
@@ -238,9 +242,8 @@ function invoiceHtml_(inv) {
     'text-transform:uppercase;color:' + muted + ';text-align:left;';
   const label = 'font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + muted + ';';
   const totalCell = 'padding-top:12px;text-align:right;font-size:16px;font-weight:bold;';
-  const contact = [CONFIG.you.email, CONFIG.you.phone].filter(Boolean).map(e).join('<br>');
-  const payment = [['Account name', CONFIG.payment.accountName], ['IBAN', CONFIG.payment.iban],
-    ['BIC', CONFIG.payment.bic]]
+  const contact = [inv.me.email, inv.me.phone].filter(Boolean).map(e).join('<br>');
+  const payment = [['Account name', inv.me.accountName], ['IBAN', inv.me.iban], ['BIC', inv.me.bic]]
     .filter(p => p[1])
     .map(p => '<tr><td style="padding:1px 14px 1px 0;color:' + muted + ';white-space:nowrap;">' + p[0] +
       '</td><td style="padding:1px 0;">' + e(p[1]) + '</td></tr>')
@@ -258,7 +261,7 @@ function invoiceHtml_(inv) {
       '<table style="width:100%;border-collapse:collapse;"><tr>' +
         '<td style="font-size:26px;letter-spacing:2px;color:' + accent + ';font-weight:bold;">INVOICE</td>' +
         '<td style="text-align:right;">' +
-          '<strong style="font-size:15px;">' + e(CONFIG.you.name) + '</strong>' +
+          '<strong style="font-size:15px;">' + e(inv.me.name) + '</strong>' +
           (contact ? '<br>' + contact : '') +
         '</td>' +
       '</tr></table>' +
@@ -296,7 +299,7 @@ function invoiceText_(inv) {
       ' – ' + formatMoney_(g.fee, inv.currency));
   });
   lines.push('', 'Total: ' + formatMoney_(inv.total, inv.currency));
-  [['Account name', CONFIG.payment.accountName], ['IBAN', CONFIG.payment.iban], ['BIC', CONFIG.payment.bic]]
+  [['Account name', inv.me.accountName], ['IBAN', inv.me.iban], ['BIC', inv.me.bic]]
     .filter(p => p[1])
     .forEach((p, i) => {
       if (i === 0) lines.push('');
