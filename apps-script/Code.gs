@@ -179,7 +179,6 @@ function resolveMe_(d) {
     phone: str_(me.phone),
     accountName: str_(me.accountName),
     iban: str_(me.iban),
-    bic: str_(me.bic),
   };
 }
 
@@ -243,7 +242,7 @@ function invoiceHtml_(inv) {
   const label = 'font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + muted + ';';
   const totalCell = 'padding-top:12px;text-align:right;font-size:16px;font-weight:bold;';
   const contact = [inv.me.email, inv.me.phone].filter(Boolean).map(e).join('<br>');
-  const payment = [['Account name', inv.me.accountName], ['IBAN', inv.me.iban], ['BIC', inv.me.bic]]
+  const payment = [['Account name', inv.me.accountName], ['IBAN', inv.me.iban]]
     .filter(p => p[1])
     .map(p => '<tr><td style="padding:1px 14px 1px 0;color:' + muted + ';white-space:nowrap;">' + p[0] +
       '</td><td style="padding:1px 0;">' + e(p[1]) + '</td></tr>')
@@ -299,7 +298,7 @@ function invoiceText_(inv) {
       ' – ' + formatMoney_(g.fee, inv.currency));
   });
   lines.push('', 'Total: ' + formatMoney_(inv.total, inv.currency));
-  [['Account name', inv.me.accountName], ['IBAN', inv.me.iban], ['BIC', inv.me.bic]]
+  [['Account name', inv.me.accountName], ['IBAN', inv.me.iban]]
     .filter(p => p[1])
     .forEach((p, i) => {
       if (i === 0) lines.push('');

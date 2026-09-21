@@ -19,7 +19,7 @@ const gig = (over = {}) => ({ date: '2026-08-26', venue: "St Patrick's Cathedral
 // What the app sends from its Settings screen.
 const ME = {
   name: 'Sam Singer', email: 'sam@example.com', phone: '087 123 4567',
-  accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112', bic: 'BOFIIE2D',
+  accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112',
 };
 const call = (b, action, data) => b.call(action, { me: ME, ...data });
 

@@ -18,7 +18,7 @@ iPhone app  ──(web app URL + API key)──►  Apps Script  ──►  Gmai
 
 ## Your details
 
-On first use the app asks for your name, email, phone, account name, IBAN and BIC. They go at the top
+On first use the app asks for your name, email, phone, account name and IBAN. They go at the top
 of the invoice and in its payment box. They're saved in the browser storage of the Home Screen app, so
 they never reach Google or GitHub, and they're sent with each invoice you draft. Only the name is
 required; blank lines are simply left off. Change them any time under ⚙️, and note they'll need

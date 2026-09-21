@@ -11,7 +11,7 @@ const OTHER = '__other';
 
 let connection = readLocal(CONFIG_KEY) || { url: '', key: '' };
 // Your name and bank details, kept on this phone and sent with each invoice.
-let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '', bic: '' };
+let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '' };
 const state = {
   config: readLocal(CACHE_KEY),
   error: '',
@@ -300,7 +300,6 @@ function settingsHtml() {
       <div class="card">
         ${field('accountName', 'Account name', 'autocapitalize="words"')}
         ${field('iban', 'IBAN', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
-        ${field('bic', 'BIC', 'autocapitalize="characters" autocorrect="off" spellcheck="false"')}
       </div>
       <div class="stack"><button class="btn ${hasDetails() ? '' : 'primary'}" type="submit">Save my details</button></div>
       <p class="hint">These go at the top of the invoice and in its payment box. They're stored on this
