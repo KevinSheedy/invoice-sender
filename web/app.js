@@ -211,6 +211,7 @@ function render() {
       : failed ? 'Can\'t reach Google'
         : state.done ? 'Draft ready' : 'New invoice';
   $('#back').hidden = !settings;
+  $('#refresh').hidden = settings;
   $('#settings-link').hidden = starting;
 
   const view = $('#view');
@@ -587,6 +588,12 @@ function openSheet(html) {
 // ---------------------------------------------------------------------------
 // Start up
 
+$('#refresh').addEventListener('click', e => {
+  e.currentTarget.disabled = true;
+  e.currentTarget.classList.add('working');
+  toast('Checking for updates…');
+  refreshApp();
+});
 $('#sheet-close').addEventListener('click', () => { $('#sheet').hidden = true; });
 window.addEventListener('hashchange', () => {
   render();

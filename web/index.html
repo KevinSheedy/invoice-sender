@@ -18,10 +18,18 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-side"><a id="back" class="link" href="#/" hidden>‹ Back</a></div>
+    <div class="topbar-side">
+      <a id="back" class="link" href="#/" hidden>‹ Back</a>
+      <button id="refresh" class="icon-btn" type="button" aria-label="Check for updates">
+        <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66"/>
+          <path d="M20 3.5V9h-5.5"/>
+        </svg>
+      </button>
+    </div>
     <h1 id="title">New invoice</h1>
-    <div class="topbar-side right"><a id="settings-link" class="link" href="#/settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" class="gear" aria-hidden="true">
+    <div class="topbar-side right"><a id="settings-link" class="icon-btn" href="#/settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
         <circle cx="12" cy="12" r="3.2"/>
         <path d="M9.53 1.69 L14.47 1.69 L15.18 4.66 L14.94 4.56 L17.54 2.96 L21.04 6.46 L19.44 9.06 L19.34 8.82 L22.31 9.53 L22.31 14.47 L19.34 15.18 L19.44 14.94 L21.04 17.54 L17.54 21.04 L14.94 19.44 L15.18 19.34 L14.47 22.31 L9.53 22.31 L8.82 19.34 L9.06 19.44 L6.46 21.04 L2.96 17.54 L4.56 14.94 L4.66 15.18 L1.69 14.47 L1.69 9.53 L4.66 8.82 L4.56 9.06 L2.96 6.46 L6.46 2.96 L9.06 4.56 L8.82 4.66 Z"/>
       </svg>
