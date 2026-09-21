@@ -144,8 +144,16 @@ function createDraft_(d) {
       '<p>' + escapeHtml_(fill_(CONFIG.signOff, vars)).replace(/\n/g, '<br>') + '</p>';
   }
 
-  GmailApp.createDraft(inv.client.email, subject, body, options);
-  return { subject: subject, to: inv.client.email, method: inv.method, total: inv.total };
+  const draft = GmailApp.createDraft(inv.client.email, subject, body, options);
+  return {
+    subject: subject,
+    to: inv.client.email,
+    method: inv.method,
+    total: inv.total,
+    // Feeds the app's "open the draft itself" link (googlegmail:///cv=…), which is an old
+    // undocumented Gmail scheme and may quietly do nothing.
+    messageId: draft.getMessageId(),
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -48,6 +48,7 @@ test('drafts an invoice in the email body for John', () => {
   assert.equal(res.to, 'angel@anuna.ie');
   assert.equal(res.subject, "Invoice for performance at St Patrick's Cathedral 2026-08-26");
   assert.equal(res.total, 125);
+  assert.equal(res.messageId, b.drafts[0].messageId, 'the app links to the draft with this');
 
   assert.equal(b.drafts.length, 1);
   const draft = b.drafts[0];

@@ -48,7 +48,11 @@ export function createBackend({ log = () => {} } = {}) {
       },
     },
     GmailApp: {
-      createDraft: (to, subject, body, options) => { drafts.push({ to, subject, body, options }); },
+      createDraft: (to, subject, body, options) => {
+        const messageId = '18f' + drafts.length + 'c0ffee';
+        drafts.push({ messageId, to, subject, body, options });
+        return { getMessageId: () => messageId };
+      },
     },
   };
 

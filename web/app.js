@@ -283,7 +283,10 @@ function doneHtml() {
     <div class="stack">
       <a class="btn primary big" href="googlegmail://">Open Gmail to send it</a>
       <button class="btn" id="again" type="button">New invoice</button>
-    </div>`;
+    </div>
+    ${d.messageId ? `<p class="hint" style="text-align:center">
+      <a href="googlegmail:///cv=${h(d.messageId)}">Try opening the draft itself</a> –
+      an old Gmail link that may do nothing.</p>` : ''}`;
 }
 
 function settingsHtml() {

@@ -81,6 +81,9 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 - The date defaults to today, and venues you've used before are suggested. Both are only on your phone.
 - **＋ Add gig** puts several gigs on one invoice. It's then dated today and lists each gig's own date.
 - **Preview** shows exactly what the client will see.
+- After drafting, **Open Gmail to send it** opens the Gmail app, where the draft is at the top of
+  Drafts. The smaller *Try opening the draft itself* link uses an old, undocumented Gmail URL
+  (`googlegmail:///cv=<messageId>`) to jump straight to it; it may simply do nothing.
 - The subject line is `Invoice for performance at {venues} {gigDates}`, for example
   *Invoice for performance at St Patrick's Cathedral 2026-08-26*.
 
