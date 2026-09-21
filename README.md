@@ -87,6 +87,14 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 - The subject line is `Invoice for performance at {venues} {gigDates}`, for example
   *Invoice for performance at St Patrick's Cathedral 2026-08-26*.
 
+## Test mode
+
+Settings has a **Test mode** switch. With it on, the client's address keeps its mailbox name but gets a
+harmless domain — `angel@anuna.ie` becomes `angel@example.org` — and the subject starts with `[TEST]`.
+`example.org` is reserved by the IETF and accepts no mail, so nothing can reach a client by accident.
+The invoice screen shows an amber banner the whole time it's on, and the switch survives restarts, so
+remember to turn it off. The domain and prefix are `testDomain` and `testSubjectPrefix` in `CONFIG`.
+
 ## Changing the Apps Script
 
 ```sh

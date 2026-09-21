@@ -20,6 +20,11 @@ const CONFIG = {
     { id: 'ardu', name: 'Ardú', email: 'ardumusic@gmail.com', defaultFee: null, method: 'pdf' },
   ],
 
+  // Test mode (a switch in the app) sends to this domain instead of the real address, so
+  // angel@anuna.ie becomes angel@example.org. example.org is reserved and accepts no mail.
+  testDomain: 'example.org',
+  testSubjectPrefix: '[TEST] ',
+
   lineDescription: 'Performance at {venue}',
   subject: 'Invoice for performance at {venues} {gigDates}',
   greeting: 'Hi {clientName},',
@@ -120,6 +125,7 @@ function preview_(d) {
     to: inv.client.email,
     method: inv.method,
     total: inv.total,
+    test: inv.test,
     html: invoiceHtml_(inv),
   };
 }
@@ -150,6 +156,7 @@ function createDraft_(d) {
     to: inv.client.email,
     method: inv.method,
     total: inv.total,
+    test: inv.test,
     // Feeds the app's "open the draft itself" link (googlegmail:///cv=…), which is an old
     // undocumented Gmail scheme and may quietly do nothing.
     messageId: draft.getMessageId(),
@@ -162,6 +169,8 @@ function createDraft_(d) {
 function buildInvoice_(d) {
   const me = resolveMe_(d);
   const client = resolveClient_(d);
+  const test = d.test === true;
+  if (test) client.email = client.email.replace(/@.*$/, '@' + CONFIG.testDomain);
   const gigs = (Array.isArray(d.gigs) ? d.gigs : []).map(parseGig_)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (!gigs.length) throw new Error('Add at least one gig');
@@ -169,6 +178,7 @@ function buildInvoice_(d) {
     me,
     client,
     gigs,
+    test,
     method: ['pdf', 'body'].indexOf(d.method) === -1 ? client.method : d.method,
     date: today_(),
     currency: CONFIG.currency,
@@ -212,7 +222,7 @@ function parseGig_(g) {
 }
 
 function subject_(inv) {
-  return fill_(CONFIG.subject, vars_(inv));
+  return (inv.test ? CONFIG.testSubjectPrefix : '') + fill_(CONFIG.subject, vars_(inv));
 }
 
 function vars_(inv) {

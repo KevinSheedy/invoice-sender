@@ -7,11 +7,14 @@ const CONFIG_KEY = 'gigInvoices.connection';
 const CACHE_KEY = 'gigInvoices.config';
 const VENUES_KEY = 'gigInvoices.venues';
 const DETAILS_KEY = 'gigInvoices.details';
+const TEST_KEY = 'gigInvoices.testMode';
 const OTHER = '__other';
 
 let connection = readLocal(CONFIG_KEY) || { url: '', key: '' };
 // Your name and bank details, kept on this phone and sent with each invoice.
 let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '' };
+// Test mode swaps the client's email domain for a harmless one, so nothing reaches a real client.
+let testMode = readLocal(TEST_KEY) === true;
 const state = {
   config: readLocal(CACHE_KEY),
   starting: true,
@@ -171,9 +174,14 @@ function selectClient(id) {
   });
 }
 
+// Mirrors what the script does to the address in test mode, so the app promises the truth.
+function shownEmail(email) {
+  return testMode ? String(email || '').replace(/@.*$/, '@example.org') : (email || '');
+}
+
 function invoiceData() {
   const gigs = state.gigs.map(g => ({ date: g.date, venue: g.venue, fee: g.fee }));
-  const data = { me: details, gigs, method: method() };
+  const data = { me: details, gigs, method: method(), test: testMode };
   if (state.clientId === OTHER) {
     data.clientName = state.custom.name;
     data.clientEmail = state.custom.email;
@@ -300,6 +308,7 @@ function formHtml() {
 
   return `
     ${state.error ? `<div class="error">${h(state.error)}</div>` : ''}
+    ${testMode ? '<div class="test-banner">Test mode – emails go to @example.org, not the client</div>' : ''}
     <div class="card">
       <label class="field"><span>Client</span>
         <select id="client">
@@ -335,13 +344,16 @@ function formHtml() {
       <button class="btn" id="preview" type="button">Preview</button>
       <button class="btn primary big" id="create" type="button">Create Gmail draft</button>
     </div>
-    <p class="hint">Goes to ${custom ? h(state.custom.email || 'the address above') : h(client ? client.name + ' <' + client.email + '>' : '')}.
+    <p class="hint">Goes to ${custom
+      ? h(shownEmail(state.custom.email) || 'the address above')
+      : h(client ? client.name + ' <' + shownEmail(client.email) + '>' : '')}.
       It'll be waiting in your Gmail drafts for you to check and send.</p>`;
 }
 
 function doneHtml() {
   const d = state.done;
   return `
+    ${d.test ? '<div class="test-banner">Test mode – this went to a test address</div>' : ''}
     <div class="card pad">
       <p style="margin-top:0"><strong>Draft ready in Gmail.</strong></p>
       <p style="margin-bottom:0">To ${h(d.to)}<br>“${h(d.subject)}”<br>
@@ -405,6 +417,14 @@ function settingsHtml() {
     <p class="hint">Both come from the Apps Script setup steps in the README. They're stored only on this phone.</p>
     <p class="hint">Your clients and the email wording live in <code>CONFIG</code> at the top of
       <code>Code.gs</code>. Change them there and deploy.</p>
+    <div class="section-title">Test mode</div>
+    <div class="segmented">
+      <button type="button" data-test="off" aria-pressed="${!testMode}">Off – real clients</button>
+      <button type="button" data-test="on" aria-pressed="${testMode}">On – test address</button>
+    </div>
+    <p class="hint">With test mode on, an invoice to angel@anuna.ie is drafted to angel@example.org
+      instead, and the subject starts with [TEST]. Nothing can reach a client by accident.</p>
+
     <div class="section-title">App</div>
     <div class="stack" style="margin-top:0">
       <button class="btn" id="refresh-app" type="button">Check for updates</button>
@@ -496,6 +516,15 @@ function bindSettings(root) {
     toast('Details saved');
     if (isConnected()) location.hash = '#/';
     else render();
+  });
+
+  root.querySelectorAll('[data-test]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      testMode = btn.dataset.test === 'on';
+      writeLocal(TEST_KEY, testMode);
+      toast(testMode ? 'Test mode on – emails go to @example.org' : 'Test mode off – emails go to real clients');
+      render();
+    });
   });
 
   root.querySelector('#refresh-app').addEventListener('click', e => {

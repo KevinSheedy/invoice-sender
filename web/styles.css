@@ -9,6 +9,8 @@
   --accent-soft: #efe7f7;
   --danger: #c0392b;
   --bad-soft: #fbe4e1;
+  --warn: #8a5a00;
+  --warn-soft: #fbeeda;
   --radius: 14px;
   --top: env(safe-area-inset-top, 0px);
   --bottom: env(safe-area-inset-bottom, 0px);
@@ -27,6 +29,8 @@
     --accent-soft: #342843;
     --danger: #ff7b6b;
     --bad-soft: #43201c;
+    --warn: #f0b35a;
+    --warn-soft: #3a2c16;
   }
 }
 
@@ -232,6 +236,17 @@ main {
   padding: 8px 8px 0 16px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.test-banner {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 /* Splash and startup error */

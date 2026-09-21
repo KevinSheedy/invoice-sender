@@ -140,6 +140,26 @@ test('needs your name before it will draft anything', () => {
   assert.doesNotMatch(pdf, /Payment details/);
 });
 
+test('test mode redirects the email to a safe domain', () => {
+  const b = setUp();
+  const res = ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], test: true }));
+  assert.equal(res.to, 'angel@example.org', 'same mailbox name, harmless domain');
+  assert.equal(res.test, true);
+  assert.equal(res.subject, "[TEST] Invoice for performance at St Patrick's Cathedral 2026-08-26");
+  assert.equal(b.drafts[0].to, 'angel@example.org');
+  assert.match(b.drafts[0].options.htmlBody, /angel@example\.org/, 'the invoice shows where it went');
+
+  // A one-off client is redirected too, and previews agree with what would be drafted.
+  const oneOff = ok(call(b, 'preview', {
+    clientName: 'The Crown', clientEmail: 'bookings@crownbar.ie', gigs: [gig()], test: true,
+  }));
+  assert.equal(oneOff.to, 'bookings@example.org');
+
+  // Off by default: nothing in the request means the real address.
+  assert.equal(ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()] })).to, 'angel@anuna.ie');
+  assert.equal(ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], test: 'yes' })).to, 'angel@anuna.ie');
+});
+
 test('preview returns the same invoice without drafting anything', () => {
   const b = setUp();
   const res = ok(call(b, 'preview', { clientId: 'john', gigs: [gig()] }));
