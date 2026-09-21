@@ -14,6 +14,7 @@ let connection = readLocal(CONFIG_KEY) || { url: '', key: '' };
 let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '' };
 const state = {
   config: readLocal(CACHE_KEY),
+  starting: true,
   error: '',
   clientId: '',
   custom: { name: '', email: '' },
@@ -62,8 +63,12 @@ function hasDetails() {
   return Boolean(details.name.trim());
 }
 
+const REQUEST_TIMEOUT_MS = 30000;
+
 async function api(action, data) {
   if (!isConnected()) throw new Error('Connect the app to Google in Settings first');
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), REQUEST_TIMEOUT_MS);
   let res;
   try {
     res = await fetch(connection.url, {
@@ -71,9 +76,14 @@ async function api(action, data) {
       // text/plain keeps this a "simple" request, which Apps Script needs (it can't answer CORS preflights).
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: connection.key, action, data }),
+      signal: stop.signal,
     });
   } catch (err) {
-    throw new Error('Couldn\'t reach Google – check your signal and try again');
+    throw new Error(err && err.name === 'AbortError'
+      ? 'Google took too long to answer – try again'
+      : 'Couldn\'t reach Google – check your signal and try again');
+  } finally {
+    clearTimeout(timer);
   }
   let body;
   try {
@@ -86,7 +96,13 @@ async function api(action, data) {
 }
 
 async function loadConfig() {
-  if (!isConnected()) return;
+  if (!isConnected()) {
+    state.starting = false;
+    render();
+    return;
+  }
+  state.starting = true;
+  render();
   try {
     state.config = await api('config');
     state.error = '';
@@ -95,6 +111,7 @@ async function loadConfig() {
   } catch (err) {
     state.error = err.message;
   }
+  state.starting = false;
   render();
 }
 
@@ -187,15 +204,59 @@ function resetForm() {
 
 function render() {
   const settings = location.hash === '#/settings';
-  $('#title').textContent = settings ? 'Settings' : state.done ? 'Draft ready' : 'New invoice';
+  const starting = !settings && isConnected() && state.starting;
+  const failed = !settings && isConnected() && !state.starting && state.error;
+  $('#title').textContent = settings ? 'Settings'
+    : starting ? 'Gig Invoices'
+      : failed ? 'Can\'t reach Google'
+        : state.done ? 'Draft ready' : 'New invoice';
   $('#back').hidden = !settings;
-  $('#settings-link').hidden = settings;
+  $('#settings-link').hidden = starting;
 
   const view = $('#view');
-  view.innerHTML = settings ? settingsHtml() : state.done ? doneHtml() : formHtml();
+  view.innerHTML = settings ? settingsHtml()
+    : starting ? splashHtml()
+      : failed ? errorHtml()
+        : state.done ? doneHtml() : formHtml();
   if (settings) bindSettings(view);
+  else if (starting) return;
+  else if (failed) bindError(view);
   else if (state.done) bindDone(view);
   else bindForm(view);
+}
+
+function splashHtml() {
+  return `
+    <div class="splash">
+      <img src="icons/icon.svg" alt="" width="84" height="84">
+      <div class="spinner" aria-label="Loading"></div>
+      <p class="hint">Connecting to Google…</p>
+    </div>`;
+}
+
+function errorHtml() {
+  return `
+    <div class="splash">
+      <img src="icons/icon.svg" alt="" width="84" height="84" style="opacity:0.35">
+      <div class="error" style="margin:0">${h(state.error)}</div>
+      ${state.config ? '<p class="hint">You can still fill in an invoice, but drafting it needs Google.</p>' : ''}
+    </div>
+    <div class="stack">
+      <button class="btn primary" id="retry" type="button">Try again</button>
+      ${state.config ? '<button class="btn" id="carry-on" type="button">Fill it in anyway</button>' : ''}
+      <a class="btn" href="#/settings">Settings</a>
+    </div>`;
+}
+
+function bindError(root) {
+  root.querySelector('#retry').addEventListener('click', e => busy(e.currentTarget, 'Trying…', loadConfig));
+  const carryOn = root.querySelector('#carry-on');
+  if (carryOn) {
+    carryOn.addEventListener('click', () => {
+      state.error = '';
+      render();
+    });
+  }
 }
 
 function formHtml() {
@@ -209,12 +270,7 @@ function formHtml() {
       </div>
       <div class="stack"><a class="btn primary big" href="#/settings">${isConnected() ? 'Add your details' : 'Get started'}</a></div>`;
   }
-  if (!state.config) {
-    return (state.error ? `<div class="error">${h(state.error)}</div>` : '') +
-      (state.error
-        ? '<div class="stack"><button class="btn" id="retry" type="button">Try again</button></div>'
-        : '<p class="hint">Loading…</p>');
-  }
+  if (!state.config) return splashHtml();
 
   const custom = state.clientId === OTHER;
   const client = currentClient();
@@ -359,8 +415,6 @@ function settingsHtml() {
 // Behaviour
 
 function bindForm(root) {
-  const retry = root.querySelector('#retry');
-  if (retry) retry.addEventListener('click', loadConfig);
   if (!state.config) return;
 
   root.querySelector('#client').addEventListener('change', e => {
@@ -401,7 +455,14 @@ function bindForm(root) {
 
   root.querySelector('#preview').addEventListener('click', async e => {
     const res = await busy(e.currentTarget, 'Preparing…', () => api('preview', invoiceData()));
-    if (res) openSheet(res.html);
+    if (!res) return;
+    if (typeof res.html !== 'string' || !res.html) {
+      // Shouldn't happen; showing what did come back beats rendering "undefined" in the sheet.
+      const got = typeof res === 'string' ? res : JSON.stringify(res);
+      toast('No preview came back from Google. It replied: ' + String(got).slice(0, 80), true);
+      return;
+    }
+    openSheet(res.html);
   });
   root.querySelector('#create').addEventListener('click', async e => {
     const res = await busy(e.currentTarget, 'Creating…', () => api('createDraft', invoiceData()));
