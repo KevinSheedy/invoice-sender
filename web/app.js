@@ -299,6 +299,16 @@ function doneHtml() {
       an old Gmail link that may do nothing.</p>` : ''}`;
 }
 
+// Shows which published version is running, so you can tell whether a refresh worked.
+function buildLabel() {
+  const build = window.BUILD || {};
+  if (!build.at) return 'Running a local build';
+  const when = new Date(build.at);
+  const stamp = isNaN(when) ? build.at : new Intl.DateTimeFormat('en-IE',
+    { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(when);
+  return `Updated ${stamp} · ${build.commit || '?'}`;
+}
+
 function settingsHtml() {
   const field = (name, label, attrs = '') =>
     `<label class="field"><span>${label}</span><input name="${name}" value="${h(details[name])}" ${attrs}></label>`;
@@ -337,7 +347,8 @@ function settingsHtml() {
     </form>
     <p class="hint">Both come from the Apps Script setup steps in the README. They're stored only on this phone.</p>
     <p class="hint">Your clients and the email wording live in <code>CONFIG</code> at the top of
-      <code>Code.gs</code>. Change them there and deploy.</p>`;
+      <code>Code.gs</code>. Change them there and deploy.</p>
+    <p class="hint" style="text-align:center">${h(buildLabel())}</p>`;
 }
 
 // ---------------------------------------------------------------------------

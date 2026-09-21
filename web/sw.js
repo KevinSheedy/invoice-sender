@@ -1,7 +1,7 @@
 // Network first, so a new version shows up straight away; the cache only helps if there's
 // no signal at all (the app then opens, but can't load or save until you're back online).
 const CACHE = 'gig-invoices-v1';
-const SHELL = ['./', 'index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png'];
+const SHELL = ['./', 'index.html', 'app.js', 'build.js', 'styles.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
