@@ -17,7 +17,7 @@ const state = {
   error: '',
   clientId: '',
   custom: { name: '', email: '' },
-  gigs: [newGig()],
+  gigs: [],   // filled in at the bottom, once newGig() can read state
   method: '',   // empty means "whatever this client normally gets"
   done: null,
 };
@@ -25,7 +25,13 @@ const state = {
 const $ = sel => document.querySelector(sel);
 
 function newGig() {
-  return { date: today(), venue: '', fee: '' };
+  // feeAuto marks a fee that came from the client's default, so switching client can replace it.
+  return { date: today(), venue: '', fee: defaultFee(), feeAuto: true };
+}
+
+function defaultFee() {
+  const client = currentClient();
+  return client && client.defaultFee !== null ? String(client.defaultFee) : '';
 }
 
 // ---------------------------------------------------------------------------
@@ -139,14 +145,18 @@ function total() {
 function selectClient(id) {
   state.clientId = id;
   state.method = '';
-  const client = currentClient();
-  if (client && client.defaultFee !== null) {
-    state.gigs.forEach(g => { if (!String(g.fee).trim()) g.fee = client.defaultFee; });
-  }
+  const fee = defaultFee();
+  state.gigs.forEach(g => {
+    if (g.feeAuto || !String(g.fee).trim()) {
+      g.fee = fee;
+      g.feeAuto = true;
+    }
+  });
 }
 
 function invoiceData() {
-  const data = { me: details, gigs: state.gigs, method: method() };
+  const gigs = state.gigs.map(g => ({ date: g.date, venue: g.venue, fee: g.fee }));
+  const data = { me: details, gigs, method: method() };
   if (state.clientId === OTHER) {
     data.clientName = state.custom.name;
     data.clientEmail = state.custom.email;
@@ -349,8 +359,12 @@ function bindForm(root) {
 
   root.querySelectorAll('[data-field]').forEach(input => {
     input.addEventListener('input', e => {
-      state.gigs[Number(e.target.dataset.index)][e.target.dataset.field] = e.target.value;
-      if (e.target.dataset.field === 'fee') root.querySelector('#total').textContent = money(total());
+      const gig = state.gigs[Number(e.target.dataset.index)];
+      gig[e.target.dataset.field] = e.target.value;
+      if (e.target.dataset.field === 'fee') {
+        gig.feeAuto = false;   // you've set this one yourself now
+        root.querySelector('#total').textContent = money(total());
+      }
     });
   });
   root.querySelectorAll('[data-remove]').forEach(btn => {
@@ -360,10 +374,7 @@ function bindForm(root) {
     });
   });
   root.querySelector('#add-gig').addEventListener('click', () => {
-    const client = currentClient();
-    const gig = newGig();
-    if (client && client.defaultFee !== null) gig.fee = client.defaultFee;
-    state.gigs.push(gig);
+    state.gigs.push(newGig());
     render();
   });
   root.querySelectorAll('[data-method]').forEach(btn => {
@@ -481,7 +492,8 @@ window.addEventListener('hashchange', () => {
   window.scrollTo(0, 0);
 });
 
-if (state.config && clients().length) selectClient(clients()[0].id);
+if (state.config && clients().length) state.clientId = clients()[0].id;
+state.gigs = [newGig()];
 render();
 loadConfig();
 
