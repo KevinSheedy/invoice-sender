@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Gig Invoices</title>
-  <meta name="description" content="Log gigs and email invoices from your phone">
+  <meta name="description" content="Draft a gig invoice in your Gmail from your phone">
   <meta name="theme-color" content="#f4f1f6" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151217" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,19 +18,14 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-side"><a id="back" class="back" hidden>‹ Back</a></div>
-    <h1 id="title">Gig Invoices</h1>
-    <div class="topbar-side right"><span id="sync" class="sync" hidden aria-label="Syncing"></span></div>
+    <div class="topbar-side"><a id="back" class="link" href="#/" hidden>‹ Back</a></div>
+    <h1 id="title">New invoice</h1>
+    <div class="topbar-side right"><a id="settings-link" class="link" href="#/settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" class="gear" aria-hidden="true"><circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+    </a></div>
   </header>
   <main id="view"></main>
-  <nav class="tabs" aria-label="Sections">
-    <a href="#/" data-tab="home"><span class="tab-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6"/></svg></span>Invoices</a>
-    <a href="#/clients" data-tab="clients"><span class="tab-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Clients</a>
-    <a href="#/settings" data-tab="settings"><span class="tab-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></span>Settings</a>
-  </nav>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <div id="sheet" class="sheet" hidden>
     <div class="sheet-bar">

@@ -1,6 +1,6 @@
-// Runs the app locally against an in-memory fake of Google (Sheets, Drive, Gmail).
-//   node dev/server.mjs            → http://localhost:8787, connect with URL http://localhost:8787/exec, key "dev"
-//   node dev/server.mjs --seed     → same, with a few sample clients and gigs
+// Runs the app locally against an in-memory fake of Gmail.
+//   node dev/server.mjs   → http://localhost:8787, connect with URL http://localhost:8787/exec, key "dev"
+// Drafts the fake backend made are at /fake-gmail, and the newest one renders at /fake-gmail/last.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -14,31 +14,17 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
 };
 
-const backend = createBackend({ driveUrlBase: `http://localhost:${PORT}/fake-drive/`, log: m => console.log(m) });
+const backend = createBackend({ log: m => console.log(m) });
 backend.props.set('API_KEY', 'dev');
-backend.context.setup();
-
-if (process.argv.includes('--seed')) {
-  const call = (a, d) => {
-    const res = backend.call(a, d);
-    if (!res.ok) throw new Error(res.error);
-    return res.result;
-  };
-  call('saveSettings', {
-    yourName: 'Sam Singer', email: 'sam@example.com',
-    phone: '087 123 4567', accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112 3456 78', bic: 'BOFIIE2D',
-  });
-  const crown = call('saveClient', { name: 'The Crown Bar', email: 'bookings@crownbar.ie', defaultFee: 250 });
-  const wed = call('saveClient', { name: 'Ellen & Tom (wedding)', email: 'ellen@example.com' });
-  call('saveGig', { clientId: crown.id, date: '2026-09-05', venue: 'The Crown Bar', description: 'Jazz trio vocals', fee: 250 });
-  call('saveGig', { clientId: crown.id, date: '2026-09-12', venue: 'The Crown Bar', description: 'Jazz trio vocals', fee: 250 });
-  const g = call('saveGig', { clientId: wed.id, date: '2026-08-22', venue: 'Tankardstown House', description: 'Ceremony & drinks reception', fee: 650 });
-  call('createInvoice', { clientId: wed.id, gigIds: [g.id] });
-  backend.sendDraft();
-}
+// Stands in for the details you put in CONFIG in Code.gs.
+backend.configure({
+  you: { name: 'Sam Singer', email: 'sam@example.com', phone: '087 123 4567' },
+  payment: { accountName: 'S Singer', iban: 'IE12 BOFI 9000 0112 3456 78', bic: 'BOFIIE2D' },
+});
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
+
   if (url.pathname === '/exec') {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -50,19 +36,24 @@ http.createServer(async (req, res) => {
     res.end(out.getContent());
     return;
   }
-  if (url.pathname.startsWith('/fake-drive/')) {
-    const file = backend.files.get(url.pathname.slice('/fake-drive/'.length));
-    if (!file) { res.writeHead(404); res.end('No such file'); return; }
-    // The fake "PDF" is the invoice HTML, which is what the real PDF is rendered from.
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(file.blob.getDataAsString());
-    return;
-  }
+
   if (url.pathname === '/fake-gmail') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(backend.mail, (k, v) => (k === 'attachments' ? v.map(a => a.getName()) : v), 2));
+    res.end(JSON.stringify(backend.drafts, (k, v) => (k === 'attachments' ? v.map(a => a.getName()) : v), 2));
     return;
   }
+
+  if (url.pathname === '/fake-gmail/last') {
+    const draft = backend.drafts[backend.drafts.length - 1];
+    if (!draft) { res.writeHead(404); res.end('No drafts yet'); return; }
+    // The fake "PDF" is the invoice HTML, which is what the real PDF is rendered from.
+    const html = draft.options.htmlBody || draft.options.attachments[0].getDataAsString();
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<title>${draft.subject}</title><body style="font:14px sans-serif;padding:16px">` +
+      `<p style="color:#666">To: ${draft.to}<br>Subject: ${draft.subject}</p><hr>${html}`);
+    return;
+  }
+
   const path = normalize(join(WEB, url.pathname === '/' ? 'index.html' : url.pathname));
   if (!path.startsWith(WEB)) { res.writeHead(403); res.end(); return; }
   try {
@@ -75,5 +66,5 @@ http.createServer(async (req, res) => {
   }
 }).listen(PORT, () => {
   console.log(`Gig Invoices dev server: http://localhost:${PORT}`);
-  console.log(`In Settings use URL http://localhost:${PORT}/exec and key "dev". Sent mail: /fake-gmail`);
+  console.log(`In Settings use URL http://localhost:${PORT}/exec and key "dev". Drafts: /fake-gmail`);
 });

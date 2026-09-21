@@ -1,135 +1,118 @@
 # Gig Invoices
 
-A small iPhone app for logging gigs and emailing invoices from your own Gmail.
+A one-screen iPhone app that leaves a gig invoice in your Gmail drafts. You check it and press Send.
 
-- **Phone app** (`web/`): a web app you add to your Home Screen. Log a gig, pick which gigs go on an
-  invoice, preview it, and create it.
-- **Google side** (`apps-script/Code.gs`): a Google Apps Script attached to a Google Sheet. It stores
-  clients, gigs and invoices in the Sheet, saves each invoice as a PDF in a Drive folder, and puts the
-  email (with the PDF attached) in your **Gmail Drafts**, ready for you to check and send from the
-  Gmail app. It can send directly instead, if you switch that on in Settings.
+- **Phone app** (`web/`): pick the client, fill in date, venue and fee, choose whether the invoice is a
+  PDF attachment or the email itself, and tap **Create Gmail draft**.
+- **Google side** (`apps-script/Code.gs`): renders the invoice and creates the draft in your own Gmail.
 
-Nothing else is involved: no server, no database, no monthly cost.
+**Nothing is stored.** No spreadsheet, no Drive files, no list of past invoices. Your Gmail Sent folder
+is the record. Your details and your clients live in `CONFIG` at the top of `Code.gs`, which is only in
+your Google account and on your Mac, never in this repo.
 
 ```
-iPhone app  ──(web app URL + API key)──►  Apps Script  ──►  Google Sheet (clients, gigs, invoices)
-                                                       ├─►  Drive folder "Gig Invoices" (PDFs)
-                                                       └─►  Gmail draft with PDF attached
+iPhone app  ──(web app URL + API key)──►  Apps Script  ──►  Gmail draft (PDF attached, or
+                                                            the invoice in the email body)
 ```
+
+## Your details and clients
+
+Everything configurable is the `CONFIG` block at the top of [`apps-script/Code.gs`](apps-script/Code.gs):
+your name and contact details, your bank details, your clients, and the email wording. Change it there
+and run `npm run deploy:script`. The app picks up new clients the next time it loads.
+
+```js
+clients: [
+  { id: 'john', name: 'John McGlynn', email: 'angel@anuna.ie', defaultFee: 125, method: 'body' },
+  { id: 'ardu', name: 'Ardú', email: 'ardumusic@gmail.com', defaultFee: null, method: 'pdf' },
+],
+```
+
+- `defaultFee` prefills the fee, or `null` for none.
+- `method` is what the client normally gets: `'body'` for the invoice in the email, `'pdf'` to attach it.
+  The app starts there and lets you switch per invoice.
+- Anyone else is a one-off: pick **Someone else…** in the app and type a name and email.
 
 ## Setup
 
-### 1. Google Sheet and Apps Script (about 10 minutes, on a laptop)
+### 1. Apps Script (about 10 minutes, on a laptop)
 
-1. Go to [sheets.new](https://sheets.new) and name the new sheet **Gig Invoices**.
-2. In the sheet, choose **Extensions → Apps Script**.
-3. Replace everything in `Code.gs` with the contents of [`apps-script/Code.gs`](apps-script/Code.gs), then save.
-4. Click the ⚙️ **Project Settings** icon and set **Time zone** to *(GMT+01:00) Dublin* (or your own), so
-   invoice dates are right.
-5. Back in the editor, pick **`setup`** in the function dropdown and click **Run**.
-   Google asks for permission to use Sheets, Drive and Gmail. Because this is your own script rather
-   than a published app, it shows *"Google hasn't verified this app"*: click **Advanced → Go to
-   Gig Invoices (unsafe) → Allow**.
-6. The **Execution log** shows your **API key**. Copy it. (Run `showApiKey` any time to see it again.)
-7. Click **Deploy → New deployment**, click ⚙️ next to *Select type* and choose **Web app**:
+1. Create a script at [script.new](https://script.new) and name it **Gig Invoices**.
+2. Paste in [`apps-script/Code.gs`](apps-script/Code.gs), fill in `CONFIG`, and save.
+3. Click ⚙️ **Project Settings** and set **Time zone** to *(GMT+01:00) Dublin*, so invoice dates are right.
+4. Pick **`setup`** in the function dropdown and click **Run**. Google asks for permission to use Gmail.
+   Because this is your own script rather than a published app, it says *"Google hasn't verified this
+   app"*: click **Advanced → Go to Gig Invoices (unsafe) → Allow**.
+5. The **Execution log** shows your **API key**. Copy it. (Run `showApiKey` any time to see it again.)
+6. **Deploy → New deployment**, click ⚙️ next to *Select type* and choose **Web app**:
    - **Execute as:** Me
    - **Who has access:** Anyone
 
-   Click **Deploy** and copy the **Web app URL** (it ends in `/exec`).
+   **Deploy**, then copy the **Web app URL** (it ends in `/exec`).
 
    *Why "Anyone"?* The phone app can't sign in to Google itself, so the web app has to accept requests
    without a Google login. The API key is what keeps other people out. Treat it like a password.
 
-The setup adds four tabs to the sheet: **Clients**, **Gigs**, **Invoices** and **Settings**. You can
-look at and edit them directly, but don't rename the tabs or the header row.
-
 ### 2. Put the phone app online
 
-The app is just the static files in `web/`, and they contain no secrets. Any static host works; this
-repo is set up for GitHub Pages:
-
-1. Push this folder to a new GitHub repository (it can be private if you have a paid plan; otherwise
-   public is fine, since there's nothing secret in it).
-2. In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
-3. The *Deploy app to GitHub Pages* workflow publishes `web/` to
-   `https://<your-username>.github.io/<repo-name>/`.
+The files in `web/` are static and contain no secrets. This repo publishes them to GitHub Pages: set
+**Settings → Pages → Source** to **GitHub Actions**, and every push to `main` republishes
+`https://<your-username>.github.io/<repo-name>/`.
 
 ### 3. Install it on your iPhone
 
-1. Open the GitHub Pages URL in **Safari**, tap **Share → Add to Home Screen**.
-2. Open **Invoices** from your Home Screen, go to **Settings**, paste the **web app URL** and
-   **API key**, and tap **Connect**. (Do this inside the Home Screen app: it keeps its own storage,
-   separate from Safari.) Notes or AirDrop are handy for getting the URL and key onto your phone.
-3. Fill in your details, bank details and email wording further down Settings, and tap **Save settings**.
-
-### 4. Try it once on yourself
-
-Add yourself as a client, log a test gig and create an invoice. Then check:
-
-- Gmail → **Drafts** has the email with the PDF attached.
-- Google Drive → **Gig Invoices** folder has the PDF, and it looks right.
-
-Then delete the test invoice, gig and client in the app.
+1. Open that URL in **Safari**, then **Share → Add to Home Screen**.
+2. Open **Invoices** from the Home Screen, tap ⚙️, paste the **web app URL** and **API key**, and tap
+   **Connect**. (Do this inside the Home Screen app: it keeps its own storage, separate from Safari.)
+3. Draft one invoice to yourself and check it looks right in Gmail.
 
 ## Using it
 
-- **Log a gig**: client, date (defaults to today), venue (remembers past venues) and fee (defaults to
-  what you charged that client last time). Handy in the dressing room; invoice later.
-- **New invoice**: pick the client, tick the gigs to include, **Preview**, then **Create Gmail draft**.
-  The invoice page then has an **Open Gmail to send it** button.
-- **Status**: *Draft in Gmail* → *Awaiting payment* (the app spots the email in your Sent folder
-  automatically; you can also tap **I've sent it**) → **Mark as paid**.
-- **Invoices are identified by date** (the date they were created), not by number.
-- **Delete invoice** (at the bottom of an invoice) removes its Gmail draft if it hasn't been sent, moves
-  the PDF to the Drive bin, and puts its gigs back under *Not invoiced yet*. An email that's already
-  been sent isn't affected.
+- The date defaults to today, and venues you've used before are suggested. Both are only on your phone.
+- **＋ Add gig** puts several gigs on one invoice. It's then dated today and lists each gig's own date.
+- **Preview** shows exactly what the client will see.
+- The subject line is `Invoice for performance at {venues} {gigDates}`, for example
+  *Invoice for performance at St Patrick's Cathedral 2026-08-26*.
 
-## Changing the Apps Script later
-
-Edit `apps-script/Code.gs` here, then:
+## Changing the Apps Script
 
 ```sh
 npm run deploy:script -- "what changed"
 ```
 
-This runs the tests, pushes `apps-script/` to Google with [clasp](https://github.com/google/clasp) and
-moves the live web app to the new version. The URL stays the same.
+Runs the tests, pushes `apps-script/` to Google with [clasp](https://github.com/google/clasp), and moves
+the live web app to the new version, keeping its URL.
 
-One-time setup for this, on a new machine:
+One-time setup on a new machine:
 
 1. Turn on **Google Apps Script API** at <https://script.google.com/home/usersettings>.
 2. `npm install`, then `npx clasp login`.
-3. Create `.clasp.json` (it's git-ignored) with your script ID from the Apps Script editor's
-   ⚙️ **Project Settings**:
+3. Create `.clasp.json` (git-ignored) with the script ID from ⚙️ **Project Settings**:
 
    ```json
    { "scriptId": "YOUR_SCRIPT_ID", "rootDir": "apps-script" }
    ```
 
-Pushing replaces the script in the editor, so make changes here rather than in the editor. Without
-clasp, you can paste `Code.gs` into the editor, then go to **Deploy → Manage deployments**, click ✏️,
-set **Version** to **New version** and click **Deploy**. Just saving isn't enough: the web app keeps
-running the old version until you deploy.
-
-If the API key ever gets out (a lost phone, say), run `resetApiKey` and enter the new key in the app.
+Deploying replaces the script in the editor, so make changes here rather than there. If the API key
+ever gets out (a lost phone, say), run `resetApiKey` in the editor and enter the new key in the app.
 
 ## Working on it locally
 
-Needs Node 20 or later. `npm install` is only needed for deploying the Apps Script (clasp).
+Needs Node 20 or later. `npm install` is only needed for deploying with clasp.
 
 ```sh
-npm test      # backend tests, running Code.gs against in-memory fakes of Sheets, Drive and Gmail
-npm run dev   # the app on http://localhost:8787 with sample data
+npm test      # runs Code.gs against an in-memory fake of Gmail
+npm run dev   # the app on http://localhost:8787
 ```
 
-In the local app's Settings, use URL `http://localhost:8787/exec` and key `dev`. Emails the fake
-backend "sent" are listed at `/fake-gmail`.
+In the local app's Settings use URL `http://localhost:8787/exec` and key `dev`. Drafts the fake backend
+made are listed at `/fake-gmail`, and the newest one renders at `/fake-gmail/last`.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
-| `apps-script/Code.gs` | Everything on the Google side: storage, invoice numbering, PDF, Gmail |
-| `apps-script/appsscript.json` | Apps Script project settings (time zone, web app access), for use with `clasp` |
+| `apps-script/Code.gs` | CONFIG, the invoice renderer and the Gmail draft |
+| `apps-script/appsscript.json` | Apps Script project settings (time zone, web app access) |
 | `web/` | The phone app: `index.html`, `app.js`, `styles.css`, manifest, service worker, icons |
-| `dev/` | Local fakes of the Google services, backend tests and the dev server |
+| `dev/` | Fake Gmail, the tests, the dev server and the deploy script |
