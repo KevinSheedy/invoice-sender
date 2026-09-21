@@ -69,8 +69,11 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 `https://<your-username>.github.io/<repo-name>/`.
 
 The app fetches the client list when it opens, and again when it comes back to the foreground after a
-minute or more, so a broken connection shows up before you try to invoice. With a cached list it does
-that quietly in the background (the refresh icon spins); without one it waits on a splash screen.
+minute or more, so a broken connection shows up before you try to invoice. With a cached list it goes
+straight to the invoice screen and checks in the background (the refresh icon spins); without one it
+waits on a splash screen. If a check fails, a red strip at the top says why and retries when tapped,
+and the app retries by itself when the phone comes back online. Requests give up after 8 seconds for
+the connection check and 15–20 seconds for rendering an invoice.
 
 ### 3. Install it on your iPhone
 

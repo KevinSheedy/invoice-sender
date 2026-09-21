@@ -69,12 +69,14 @@ function hasDetails() {
   return Boolean(details.name.trim());
 }
 
-const REQUEST_TIMEOUT_MS = 30000;
+// Apps Script is slow to wake but quick once awake. The connection check is the one that
+// shouldn't keep you waiting; rendering an invoice is allowed a bit longer.
+const TIMEOUTS = { config: 8000, preview: 15000, createDraft: 20000 };
 
 async function api(action, data) {
   if (!isConnected()) throw new Error('Connect the app to Google in Settings first');
   const stop = new AbortController();
-  const timer = setTimeout(() => stop.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => stop.abort(), TIMEOUTS[action] || 15000);
   let res;
   try {
     res = await fetch(connection.url, {
@@ -86,8 +88,8 @@ async function api(action, data) {
     });
   } catch (err) {
     throw new Error(err && err.name === 'AbortError'
-      ? 'Google took too long to answer – try again'
-      : 'Couldn\'t reach Google – check your signal and try again');
+      ? (action === 'config' ? 'Google didn\'t answer' : 'Google took too long to answer – try again')
+      : (navigator.onLine === false ? 'No internet connection' : 'Couldn\'t reach Google'));
   } finally {
     clearTimeout(timer);
   }
@@ -106,8 +108,9 @@ async function api(action, data) {
 async function loadConfig() {
   if (!isConnected() || state.checking) return;
   state.checking = true;
-  if (state.config) showChecking(true);
-  else render();
+  showChecking(true);
+  // A silent spin is enough for a routine check; if the last one failed, say what's happening.
+  if (!state.config || state.error) render();
   try {
     state.config = await api('config');
     state.error = '';
@@ -246,6 +249,19 @@ function render() {
   else bindForm(view);
 }
 
+// A quiet line at the top: nothing when all is well, a note while checking, and a tappable
+// warning when the connection is down. The invoice itself stays usable either way.
+function connectionRowHtml() {
+  if (state.checking) {
+    return '<div class="status">Checking the connection to Google…</div>';
+  }
+  if (state.error) {
+    return `<div class="status bad" id="connection-retry" role="button" tabindex="0">
+      ${h(state.error)} · <strong>Tap to retry</strong></div>`;
+  }
+  return '';
+}
+
 function showChecking(on) {
   const button = $('#refresh');
   button.classList.toggle('working', Boolean(on));
@@ -325,7 +341,7 @@ function formHtml() {
     </div>`).join('');
 
   return `
-    ${state.error ? `<div class="error">${h(state.error)}</div>` : ''}
+    ${connectionRowHtml()}
     ${testMode ? '<div class="test-banner">Test mode – emails go to @example.org, not the client</div>' : ''}
     <div class="card">
       <label class="field"><span>Client</span>
@@ -456,6 +472,8 @@ function settingsHtml() {
 // Behaviour
 
 function bindForm(root) {
+  const retry = root.querySelector('#connection-retry');
+  if (retry) retry.addEventListener('click', () => loadConfig());
   if (!state.config) return;
 
   root.querySelector('#client').addEventListener('change', e => {
@@ -654,6 +672,7 @@ $('#refresh').addEventListener('click', e => {
 });
 $('#sheet-close').addEventListener('click', () => { $('#sheet').hidden = true; });
 document.addEventListener('visibilitychange', recheckIfStale);
+window.addEventListener('online', () => loadConfig());
 window.addEventListener('pageshow', recheckIfStale);
 window.addEventListener('hashchange', () => {
   render();
