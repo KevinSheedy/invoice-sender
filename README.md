@@ -68,6 +68,10 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 **Settings → Pages → Source** to **GitHub Actions**, and every push to `main` republishes
 `https://<your-username>.github.io/<repo-name>/`.
 
+The app fetches the client list when it opens, and again when it comes back to the foreground after a
+minute or more, so a broken connection shows up before you try to invoice. With a cached list it does
+that quietly in the background (the refresh icon spins); without one it waits on a splash screen.
+
 ### 3. Install it on your iPhone
 
 1. Open that URL in **Safari**, then **Share → Add to Home Screen**.
@@ -81,6 +85,8 @@ The files in `web/` are static and contain no secrets. This repo publishes them 
 - The date defaults to today, and venues you've used before are suggested. Both are only on your phone.
 - **＋ Add gig** puts several gigs on one invoice. It's then dated today and lists each gig's own date.
 - **Preview** shows exactly what the client will see.
+- **Create Gmail draft** leaves it in Drafts to check; **Send email now** sends it straight away after
+  a confirmation, and it lands in your Sent folder.
 - After drafting, **Open Gmail to send it** opens the Gmail app, where the draft is at the top of
   Drafts. The smaller *Try opening the draft itself* link uses an old, undocumented Gmail URL
   (`googlegmail:///cv=<messageId>`) to jump straight to it; it may simply do nothing.

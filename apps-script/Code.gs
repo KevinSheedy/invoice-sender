@@ -130,8 +130,10 @@ function preview_(d) {
   };
 }
 
+// send: true emails it now; otherwise it waits in Gmail as a draft.
 function createDraft_(d) {
   const inv = buildInvoice_(d);
+  const send = d.send === true;
   const subject = subject_(inv);
   const vars = vars_(inv);
   const options = { name: inv.me.name };
@@ -150,17 +152,23 @@ function createDraft_(d) {
       '<p>' + escapeHtml_(fill_(CONFIG.signOff, vars)).replace(/\n/g, '<br>') + '</p>';
   }
 
-  const draft = GmailApp.createDraft(inv.client.email, subject, body, options);
-  return {
+  const result = {
     subject: subject,
     to: inv.client.email,
     method: inv.method,
     total: inv.total,
     test: inv.test,
-    // Feeds the app's "open the draft itself" link (googlegmail:///cv=…), which is an old
-    // undocumented Gmail scheme and may quietly do nothing.
-    messageId: draft.getMessageId(),
+    sent: send,
   };
+  if (send) {
+    GmailApp.sendEmail(inv.client.email, subject, body, options);
+    return result;
+  }
+  const draft = GmailApp.createDraft(inv.client.email, subject, body, options);
+  // Feeds the app's "open the draft itself" link (googlegmail:///cv=…), which is an old
+  // undocumented Gmail scheme and may quietly do nothing.
+  result.messageId = draft.getMessageId();
+  return result;
 }
 
 // ---------------------------------------------------------------------------

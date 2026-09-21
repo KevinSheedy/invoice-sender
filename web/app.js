@@ -15,9 +15,12 @@ let connection = readLocal(CONFIG_KEY) || { url: '', key: '' };
 let details = readLocal(DETAILS_KEY) || { name: '', email: '', phone: '', accountName: '', iban: '' };
 // Test mode swaps the client's email domain for a harmless one, so nothing reaches a real client.
 let testMode = readLocal(TEST_KEY) === true;
+const RECHECK_AFTER_MS = 60000;
+
 const state = {
   config: readLocal(CACHE_KEY),
-  starting: true,
+  checking: false,
+  checkedAt: 0,
   error: '',
   clientId: '',
   custom: { name: '', email: '' },
@@ -98,24 +101,32 @@ async function api(action, data) {
   return body.result;
 }
 
+// With a cached client list this runs quietly in the background; without one the app waits
+// on the splash screen, since there's nothing to show yet.
 async function loadConfig() {
-  if (!isConnected()) {
-    state.starting = false;
-    render();
-    return;
-  }
-  state.starting = true;
-  render();
+  if (!isConnected() || state.checking) return;
+  state.checking = true;
+  if (state.config) showChecking(true);
+  else render();
   try {
     state.config = await api('config');
     state.error = '';
+    state.checkedAt = Date.now();
     writeLocal(CACHE_KEY, state.config);
     if (!state.clientId) selectClient(state.config.clients[0] ? state.config.clients[0].id : OTHER);
   } catch (err) {
     state.error = err.message;
   }
-  state.starting = false;
+  state.checking = false;
+  showChecking(false);
   render();
+}
+
+// Re-check when the app comes back to the foreground, so a stale connection shows up before
+// you try to draft an invoice.
+function recheckIfStale() {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - state.checkedAt > RECHECK_AFTER_MS) loadConfig();
 }
 
 // ---------------------------------------------------------------------------
@@ -212,14 +223,15 @@ function resetForm() {
 
 function render() {
   const settings = location.hash === '#/settings';
-  const starting = !settings && isConnected() && state.starting;
-  const failed = !settings && isConnected() && !state.starting && state.error;
+  const starting = !settings && isConnected() && !state.config && state.checking;
+  const failed = !settings && isConnected() && !state.config && !state.checking && state.error;
   $('#title').textContent = settings ? 'Settings'
     : starting ? 'Gig Invoices'
       : failed ? 'Can\'t reach Google'
-        : state.done ? 'Draft ready' : 'New invoice';
+        : state.done ? (state.done.sent ? 'Invoice sent' : 'Draft ready') : 'New invoice';
   $('#back').hidden = !settings;
   $('#refresh').hidden = settings;
+  showChecking(state.checking);
   $('#settings-link').hidden = starting;
 
   const view = $('#view');
@@ -232,6 +244,12 @@ function render() {
   else if (failed) bindError(view);
   else if (state.done) bindDone(view);
   else bindForm(view);
+}
+
+function showChecking(on) {
+  const button = $('#refresh');
+  button.classList.toggle('working', Boolean(on));
+  button.disabled = Boolean(on);
 }
 
 function splashHtml() {
@@ -343,11 +361,12 @@ function formHtml() {
     <div class="stack">
       <button class="btn" id="preview" type="button">Preview</button>
       <button class="btn primary big" id="create" type="button">Create Gmail draft</button>
+      <button class="btn" id="send" type="button">Send email now</button>
     </div>
     <p class="hint">Goes to ${custom
       ? h(shownEmail(state.custom.email) || 'the address above')
       : h(client ? client.name + ' <' + shownEmail(client.email) + '>' : '')}.
-      It'll be waiting in your Gmail drafts for you to check and send.</p>`;
+      Drafting leaves it in Gmail for you to check; sending goes straight away.</p>`;
 }
 
 function doneHtml() {
@@ -355,14 +374,15 @@ function doneHtml() {
   return `
     ${d.test ? '<div class="test-banner">Test mode – this went to a test address</div>' : ''}
     <div class="card pad">
-      <p style="margin-top:0"><strong>Draft ready in Gmail.</strong></p>
+      <p style="margin-top:0"><strong>${d.sent ? 'Invoice sent.' : 'Draft ready in Gmail.'}</strong></p>
       <p style="margin-bottom:0">To ${h(d.to)}<br>“${h(d.subject)}”<br>
         ${d.method === 'pdf' ? 'Invoice attached as a PDF' : 'Invoice in the email itself'} · ${money(d.total)}</p>
     </div>
     <div class="stack">
-      <a class="btn primary big" href="googlegmail://">Open Gmail to send it</a>
-      <button class="btn" id="again" type="button">New invoice</button>
+      <a class="btn ${d.sent ? '' : 'primary big'}" href="googlegmail://">${d.sent ? 'Open Gmail' : 'Open Gmail to send it'}</a>
+      <button class="btn ${d.sent ? 'primary' : ''}" id="again" type="button">New invoice</button>
     </div>
+    ${d.sent ? '<p class="hint" style="text-align:center">It\'s in your Gmail Sent folder.</p>' : ''}
     ${d.messageId ? `<p class="hint" style="text-align:center">
       <a href="googlegmail:///cv=${h(d.messageId)}">Try opening the draft itself</a> –
       an old Gmail link that may do nothing.</p>` : ''}`;
@@ -485,13 +505,22 @@ function bindForm(root) {
     }
     openSheet(res.html);
   });
-  root.querySelector('#create').addEventListener('click', async e => {
-    const res = await busy(e.currentTarget, 'Creating…', () => api('createDraft', invoiceData()));
+  const draftInvoice = async (button, send) => {
+    const res = await busy(button, send ? 'Sending…' : 'Creating…',
+      () => api('createDraft', Object.assign(invoiceData(), { send })));
     if (!res) return;
     rememberVenues();
     state.done = res;
     render();
-    toast('Draft ready in Gmail');
+    toast(send ? 'Invoice sent' : 'Draft ready in Gmail');
+  };
+
+  root.querySelector('#create').addEventListener('click', e => draftInvoice(e.currentTarget, false));
+  root.querySelector('#send').addEventListener('click', e => {
+    const recipient = state.clientId === OTHER ? state.custom : currentClient();
+    const to = shownEmail(recipient ? recipient.email : '');
+    if (!confirm(`Send this ${money(total())} invoice to ${to} now? It goes straight away, with no draft to check.`)) return;
+    draftInvoice(e.currentTarget, true);
   });
 }
 
@@ -624,6 +653,8 @@ $('#refresh').addEventListener('click', e => {
   refreshApp();
 });
 $('#sheet-close').addEventListener('click', () => { $('#sheet').hidden = true; });
+document.addEventListener('visibilitychange', recheckIfStale);
+window.addEventListener('pageshow', recheckIfStale);
 window.addEventListener('hashchange', () => {
   render();
   window.scrollTo(0, 0);

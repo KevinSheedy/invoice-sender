@@ -34,13 +34,14 @@ http.createServer(async (req, res) => {
 
   if (url.pathname === '/fake-gmail') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(backend.drafts, (k, v) => (k === 'attachments' ? v.map(a => a.getName()) : v), 2));
+    res.end(JSON.stringify({ drafts: backend.drafts, sent: backend.sent },
+      (k, v) => (k === 'attachments' ? v.map(a => a.getName()) : v), 2));
     return;
   }
 
   if (url.pathname === '/fake-gmail/last') {
-    const draft = backend.drafts[backend.drafts.length - 1];
-    if (!draft) { res.writeHead(404); res.end('No drafts yet'); return; }
+    const draft = backend.drafts.concat(backend.sent).pop();
+    if (!draft) { res.writeHead(404); res.end('Nothing drafted or sent yet'); return; }
     // The fake "PDF" is the invoice HTML, which is what the real PDF is rendered from.
     const html = draft.options.htmlBody || draft.options.attachments[0].getDataAsString();
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

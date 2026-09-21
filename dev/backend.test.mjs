@@ -160,6 +160,24 @@ test('test mode redirects the email to a safe domain', () => {
   assert.equal(ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], test: 'yes' })).to, 'angel@anuna.ie');
 });
 
+test('sends the email instead of drafting it when asked', () => {
+  const b = setUp();
+  const res = ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], send: true }));
+  assert.equal(res.sent, true);
+  assert.equal(res.messageId, undefined, 'there is no draft to link to');
+  assert.equal(b.drafts.length, 0);
+  assert.equal(b.sent.length, 1);
+  assert.equal(b.sent[0].to, 'angel@anuna.ie');
+  assert.equal(b.sent[0].subject, "Invoice for performance at St Patrick's Cathedral 2026-08-26");
+  assert.ok(b.sent[0].options.htmlBody, 'same invoice as the draft would carry');
+
+  // Test mode still applies, and drafting stays the default.
+  ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()], send: true, test: true }));
+  assert.equal(b.sent[1].to, 'angel@example.org');
+  assert.equal(ok(call(b, 'createDraft', { clientId: 'john', gigs: [gig()] })).sent, false);
+  assert.equal(b.sent.length, 2);
+});
+
 test('preview returns the same invoice without drafting anything', () => {
   const b = setUp();
   const res = ok(call(b, 'preview', { clientId: 'john', gigs: [gig()] }));

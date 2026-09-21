@@ -22,6 +22,7 @@ class Blob {
 export function createBackend({ log = () => {} } = {}) {
   const props = new Map();
   const drafts = [];
+  const sent = [];
 
   const globals = {
     console,
@@ -48,6 +49,7 @@ export function createBackend({ log = () => {} } = {}) {
       },
     },
     GmailApp: {
+      sendEmail: (to, subject, body, options) => { sent.push({ to, subject, body, options }); },
       createDraft: (to, subject, body, options) => {
         const messageId = '18f' + drafts.length + 'c0ffee';
         drafts.push({ messageId, to, subject, body, options });
@@ -63,6 +65,7 @@ export function createBackend({ log = () => {} } = {}) {
     context,
     props,
     drafts,
+    sent,
     setNow(isoString) {
       vm.runInContext(`now_ = function () { return new Date(${JSON.stringify(isoString)}); };`, context);
     },
