@@ -33,8 +33,10 @@ test('setup makes an API key, and a wrong key is refused', () => {
 
 test('config lists the built-in clients', () => {
   const b = setUp();
-  const { clients, currency } = ok(b.call('config'));
+  const { clients, currency, templates } = ok(b.call('config'));
   assert.equal(currency, 'EUR');
+  assert.equal(templates.subject, 'Invoice for performance at {venues} {gigDates}');
+  assert.equal(templates.greeting, 'Hi {clientName},');
   assert.deepEqual(clients, [
     { id: 'john', name: 'John McGlynn', email: 'angel@anuna.ie', defaultFee: 125, method: 'body' },
     { id: 'ardu', name: 'Ardú', email: 'ardumusic@gmail.com', defaultFee: null, method: 'pdf' },

@@ -103,6 +103,13 @@ function resetApiKey() {
 function config_() {
   return {
     currency: CONFIG.currency,
+    // Lets the app build the same plain-text invoice without calling Google (the mailto trial).
+    templates: {
+      lineDescription: CONFIG.lineDescription,
+      subject: CONFIG.subject,
+      greeting: CONFIG.greeting,
+      signOff: CONFIG.signOff,
+    },
     clients: CONFIG.clients.map(c => ({
       id: c.id,
       name: c.name,
