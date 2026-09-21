@@ -348,6 +348,10 @@ function settingsHtml() {
     <p class="hint">Both come from the Apps Script setup steps in the README. They're stored only on this phone.</p>
     <p class="hint">Your clients and the email wording live in <code>CONFIG</code> at the top of
       <code>Code.gs</code>. Change them there and deploy.</p>
+    <div class="section-title">App</div>
+    <div class="stack" style="margin-top:0">
+      <button class="btn" id="refresh-app" type="button">Check for updates</button>
+    </div>
     <p class="hint" style="text-align:center">${h(buildLabel())}</p>`;
 }
 
@@ -432,6 +436,10 @@ function bindSettings(root) {
     else render();
   });
 
+  root.querySelector('#refresh-app').addEventListener('click', e => {
+    busy(e.currentTarget, 'Updating…', refreshApp);
+  });
+
   const form = root.querySelector('#connect-form');
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -456,6 +464,27 @@ function bindSettings(root) {
     if (hasDetails()) location.hash = '#/';
     else render();
   });
+}
+
+// Fetches the app's files again, past both caches, then reloads. Your saved settings
+// (connection, details, venues) live in localStorage and are untouched.
+async function refreshApp() {
+  const files = ['./', 'index.html', 'app.js', 'build.js', 'styles.css', 'manifest.webmanifest'];
+  try {
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    await Promise.all(files.map(f => fetch(f, { cache: 'reload' }).catch(() => {})));
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(r => r.update().catch(() => {})));
+    }
+  } catch (err) {
+    // Whatever failed, reloading is still the best next step.
+  }
+  location.reload();
+  return null;
 }
 
 // ---------------------------------------------------------------------------
